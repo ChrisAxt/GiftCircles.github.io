@@ -1,0 +1,13 @@
+{
+  "expo": {
+    "name": "GiftCircles",
+    "slug": "giftcircles",
+    "scheme": "giftcircles",
+    "ios": { "supportsTablet": true },
+    "web": { "bundler": "metro" },
+    "extra": {
+      "supabaseUrl": "https://bqgakovbbbiudmggduvu.supabase.co",
+      "supabaseAnonKey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJxZ2Frb3ZiYmJpdWRtZ2dkdXZ1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTcwNTY1MjEsImV4cCI6MjA3MjYzMjUyMX0.i81E7-w03a1v6BV2FwGpuNRA9tTVWF3nATgJeeO5g1k"
+    }
+  }
+}
