@@ -1,0 +1,106 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="AutoImportSettings">
+    <option name="autoReloadType" value="NONE" />
+  </component>
+  <component name="ChangeListManager">
+    <list default="true" id="5a57c665-9740-4b76-9c5f-531e4b4142a6" name="Changes" comment="">
+      <change afterPath="$PROJECT_DIR$/jest.setup.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/__tests__/ClaimButton.test.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/components/__tests__/ListCard.test.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/lib/__mocks__/supabase.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/lib/__tests__/claimCounts.test.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/lib/claimCounts.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/lib/email.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/screens/AllListsScreen.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/screens/MyClaimsScreen.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/screens/__tests__/EventDetailScreen.test.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/screens/__tests__/EventListScreen.test.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/screens/__tests__/MyClaimsScreen.test.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/src/test-utils.tsx" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supabase/functions/delete-account/index.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supabase/functions/send-invite-email/index.ts" afterDir="false" />
+      <change afterPath="$PROJECT_DIR$/supabase/functions/send-invite-email/renderShareEventEmail.ts" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/node_modules/.package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/node_modules/.package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package-lock.json" beforeDir="false" afterPath="$PROJECT_DIR$/package-lock.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/package.json" beforeDir="false" afterPath="$PROJECT_DIR$/package.json" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/ClaimButton.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/ClaimButton.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/components/FancyTabBar.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/components/FancyTabBar.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/navigation/index.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/navigation/index.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/AddItemScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/AddItemScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/CreateListScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/CreateListScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/EditEventScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/EditEventScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/EventDetailScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/EventDetailScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/EventListScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/EventListScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/ListDetailScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/ListDetailScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/OnboardingScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/OnboardingScreen.tsx" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/src/screens/ProfileScreen.tsx" beforeDir="false" afterPath="$PROJECT_DIR$/src/screens/ProfileScreen.tsx" afterDir="false" />
+    </list>
+    <option name="SHOW_DIALOG" value="false" />
+    <option name="HIGHLIGHT_CONFLICTS" value="true" />
+    <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
+    <option name="LAST_RESOLUTION" value="IGNORE" />
+  </component>
+  <component name="ClangdSettings">
+    <option name="formatViaClangd" value="false" />
+  </component>
+  <component name="Git.Settings">
+    <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$" />
+  </component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
+  <component name="ProjectId" id="32GrRGEwus7W8ovaSTpyvFAQmrf" />
+  <component name="ProjectLevelVcsManager">
+    <ConfirmationsSetting value="2" id="Add" />
+  </component>
+  <component name="ProjectViewState">
+    <option name="hideEmptyMiddlePackages" value="true" />
+    <option name="showLibraryContents" value="true" />
+  </component>
+  <component name="PropertiesComponent">{
+  &quot;keyToString&quot;: {
+    &quot;ModuleVcsDetector.initialDetectionPerformed&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.ShowReadmeOnStart&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.git.unshallow&quot;: &quot;true&quot;,
+    &quot;RunOnceActivity.readMode.enableVisualFormatting&quot;: &quot;true&quot;,
+    &quot;cf.first.check.clang-format&quot;: &quot;false&quot;,
+    &quot;cidr.known.project.marker&quot;: &quot;true&quot;,
+    &quot;com.google.services.firebase.aqiPopupShown&quot;: &quot;true&quot;,
+    &quot;git-widget-placeholder&quot;: &quot;dev&quot;,
+    &quot;last_opened_file_path&quot;: &quot;/home/chris/Documents/Repos/GiftCircles/assets/event-themes&quot;,
+    &quot;settings.editor.selected.configurable&quot;: &quot;advanced.settings&quot;
+  }
+}</component>
+  <component name="RecentsManager">
+    <key name="CopyFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/assets/event-themes" />
+    </key>
+    <key name="MoveFile.RECENT_KEYS">
+      <recent name="$PROJECT_DIR$/src/lib" />
+    </key>
+  </component>
+  <component name="TaskManager">
+    <task active="true" id="Default" summary="Default task">
+      <changelist id="5a57c665-9740-4b76-9c5f-531e4b4142a6" name="Changes" comment="" />
+      <created>1757057740710</created>
+      <option name="number" value="Default" />
+      <option name="presentableId" value="Default" />
+      <updated>1757057740710</updated>
+    </task>
+    <servers />
+  </component>
+  <component name="Vcs.Log.Tabs.Properties">
+    <option name="TAB_STATES">
+      <map>
+        <entry key="MAIN">
+          <value>
+            <State />
+          </value>
+        </entry>
+      </map>
+    </option>
+  </component>
+</project>

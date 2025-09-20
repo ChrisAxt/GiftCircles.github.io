@@ -17,6 +17,7 @@ export default function ProfileScreen({ navigation }: any) {
 
   const [eventsCount, setEventsCount] = useState<number>(0);
   const [listsCreated, setListsCreated] = useState<number>(0);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -109,6 +110,15 @@ export default function ProfileScreen({ navigation }: any) {
       toast.error('Sign out failed', e?.message ?? String(e));
     }
   };
+  const [signingOut, setSigningOut] = useState(false);
+  const handleSignOut = async () => {
+    setSigningOut(true);
+    try {
+      await signOut();
+    } finally {
+      setSigningOut(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -118,10 +128,52 @@ export default function ProfileScreen({ navigation }: any) {
     );
   }
 
+  const handleDeleteAccount = async () => {
+    // Step 1: Confirm
+    const confirm = await new Promise<boolean>((resolve) => {
+      Alert.alert(
+        "Delete your account?",
+        "This will permanently delete your profile, memberships, and sign you out.",
+        [
+          { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+          { text: "Delete", style: "destructive", onPress: () => resolve(true) },
+        ]
+      );
+    });
+    if (!confirm) return;
+
+    setDeleting(true);
+    try {
+      // Step 2: Call Edge Function (JWT is sent automatically by supabase client)
+      const { data, error } = await supabase.functions.invoke("delete-account", { body: {} });
+
+      if (error || !data?.ok) {
+        // Try to read server's message if present
+        const ctx: any = (error as any)?.context;
+        let msg = (data && data.error) || (error && (error as any).message) || "Delete failed";
+        if (ctx && typeof ctx.text === "function") {
+          try { msg = (await ctx.text()) || msg; } catch {}
+        }
+        Alert.alert("Delete failed", msg);
+        return;
+      }
+
+      // Step 3: Sign out locally
+      await supabase.auth.signOut();
+      Alert.alert("Account deleted", "Your account has been removed.");
+
+    } catch (e: any) {
+      Alert.alert("Delete failed", e?.message ?? String(e));
+    } finally {
+      setDeleting(false);
+    }
+  };
+
+
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f8fa' }}>
       {/* Header card */}
-      <View style={{ margin: 16, backgroundColor: 'white', borderRadius: 16, padding: 16, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 }}>
+      <View style={{ margin: 16, marginTop: 40, backgroundColor: 'white', borderRadius: 16, padding: 18, shadowColor: '#000', shadowOpacity: 0.05, shadowRadius: 10, elevation: 2 }}>
         <Text style={{ fontSize: 18, fontWeight: '800' }}>Profile</Text>
 
         <Text style={{ marginTop: 8, color: '#5b6b7b' }}>Email</Text>
@@ -137,7 +189,24 @@ export default function ProfileScreen({ navigation }: any) {
         </View>
 
         <View style={{ height: 8 }} />
-        <Button title={saving ? 'Saving…' : 'Save name'} onPress={saveName} disabled={saving} />
+        <Pressable
+          onPress={saveName}
+          disabled={saving}
+          style={{
+            backgroundColor: '#2e95f1',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 10,
+            alignItems: 'center',
+            opacity: saving ? 0.7 : 1,
+          }}
+        >
+          {saving ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Save name</Text>
+          )}
+        </Pressable>
 
         <View style={{ marginTop: 12, flexDirection: 'row', justifyContent: 'space-between' }}>
           <View>
@@ -160,10 +229,56 @@ export default function ProfileScreen({ navigation }: any) {
       </View>
 
       {/* Danger zone */}
-      <View style={{ margin: 16, backgroundColor: 'white', borderRadius: 16, padding: 16 }}>
-        <Text style={{ fontWeight: '800', marginBottom: 8 }}>Account</Text>
-        <Button color="#d9534f" title="Sign out" onPress={signOut} />
+      <View style={{ margin: 16, backgroundColor: 'white', borderRadius: 16, padding: 16, borderWidth: 1, borderColor: '#f1f5f9' }}>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', marginBottom: 12 }}>Account</Text>
+
+        <Pressable
+          onPress={handleSignOut}
+          disabled={signingOut}
+          style={{
+            backgroundColor: '#ef4444',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 10,
+            alignItems: 'center',
+            opacity: signingOut ? 0.7 : 1,
+          }}
+        >
+          {signingOut ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Sign out</Text>
+          )}
+        </Pressable>
       </View>
+      <View style={{ marginTop: 24, paddingHorizontal: 16 }}>
+        <View style={{ backgroundColor: "white", borderRadius: 12, padding: 16, borderWidth: 1, borderColor: "#f1f5f9" }}>
+          <Text style={{ fontSize: 16, fontWeight: "700", color: "#111827", marginBottom: 8 }}>Danger zone</Text>
+          <Text style={{ color: "#6b7280", marginBottom: 12 }}>
+            This will permanently delete your profile and remove you from events.
+          </Text>
+
+          <Pressable
+            onPress={handleDeleteAccount}
+            disabled={deleting}
+            style={{
+              backgroundColor: "#ef4444",
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: "center",
+              opacity: deleting ? 0.7 : 1,
+            }}
+          >
+            {deleting ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: "#fff", fontWeight: "700" }}>Delete account</Text>
+            )}
+          </Pressable>
+        </View>
+      </View>
+
     </View>
   );
 }

@@ -4,6 +4,7 @@ import { View, TextInput, Button, Alert, Text, Switch, ScrollView, ActivityIndic
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 import { LabeledInput, LabeledPressableField } from '../components/LabeledInput';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type MemberRow = { event_id: string; user_id: string; role: 'giver' | 'recipient' | 'admin' };
 type ProfileRow = { id: string; display_name: string | null };
@@ -25,23 +26,13 @@ export default function CreateListScreen({ route, navigation }: any) {
 
   // selections
   const [recipientIds, setRecipientIds] = useState<Record<string, boolean>>({});
-  const [recipientHidden, setRecipientHidden] = useState<Record<string, boolean>>({}); // true => hide from this recipient
-  const [restrict, setRestrict] = useState(false); // false = event-wide, true = selected only
-  const [viewerIds, setViewerIds] = useState<Record<string, boolean>>({});
+  const [restrict, setRestrict] = useState(false); // false = visible to event, true = exclude specific people
+  const [viewerIds, setViewerIds] = useState<Record<string, boolean>>({}); // re-used as "excluded" set in UI
+  const insets = useSafeAreaInsets();
 
   const toggleRecipient = (uid: string) => {
-    setRecipientIds(prev => {
-      const next = { ...prev, [uid]: !prev[uid] };
-      // when newly selected, default to "can view" (hidden = false)
-      if (!prev[uid]) {
-        setRecipientHidden(h => ({ ...h, [uid]: false }));
-      }
-      return next;
-    });
+    setRecipientIds(prev => ({ ...prev, [uid]: !prev[uid] }));
   };
-
-  const toggleRecipientHidden = (uid: string) =>
-    setRecipientHidden(prev => ({ ...prev, [uid]: !prev[uid] }));
 
   const toggleViewer = (uid: string) =>
     setViewerIds(prev => ({ ...prev, [uid]: !prev[uid] }));
@@ -81,11 +72,13 @@ export default function CreateListScreen({ route, navigation }: any) {
     return () => { cancelled = true; };
   }, [eventId]);
 
-  const membersWithNames = useMemo(() =>
-    members
-      .map(m => ({ ...m, displayName: nameFor(m.user_id, profilesMap) }))
-      .sort((a, b) => a.displayName.localeCompare(b.displayName))
-  , [members, profilesMap]);
+  const membersWithNames = useMemo(
+    () =>
+      members
+        .map(m => ({ ...m, displayName: nameFor(m.user_id, profilesMap) }))
+        .sort((a, b) => a.displayName.localeCompare(b.displayName)),
+    [members, profilesMap]
+  );
 
   const create = async () => {
     if (submitting) return;
@@ -97,11 +90,8 @@ export default function CreateListScreen({ route, navigation }: any) {
 
       if (!name.trim()) { toast.info('List name required'); return; }
 
-      // Recipients (chips)
-      const chosenRecipients = Object.entries(recipientIds)
-        .filter(([, v]) => v)
-        .map(([k]) => k);
-
+      // Recipients
+      const chosenRecipients = Object.keys(recipientIds).filter(uid => !!recipientIds[uid]);
       if (!chosenRecipients.length) {
         toast.error('Recipients required', 'Pick at least one recipient.');
         return;
@@ -109,54 +99,35 @@ export default function CreateListScreen({ route, navigation }: any) {
 
       setSubmitting(true);
 
-      // --- NEW: exclusions ---
-      // We reuse viewerIds as the EXCLUDED set based on the new UI.
-      const excludedIds = new Set(
-        Object.entries(viewerIds)
-          .filter(([, v]) => v)
-          .map(([k]) => k)
-      );
-
-      // Build the allow-list expected by the RPC when restricted:
-      // allowed = (all event members) minus excluded, plus creator (deduped).
-      // We can derive all member ids from membersWithNames (already loaded for this screen).
-      const allMemberIds = (membersWithNames ?? []).map(m => m.user_id);
-      const allowedViewers = Array.from(
-        new Set(
-          allMemberIds.filter(id => !excludedIds.has(id)).concat(user.id)
-        )
-      );
-
-      // Visibility: keep using 'selected' only when restricting, otherwise 'event'
-      const visibility = restrict ? 'selected' : 'event';
-
-      const payload = {
+      // We’re using the EXCLUSIONS model:
+      const { data: newListId, error: rpcErr } = await supabase.rpc('create_list_with_people', {
         p_event_id: eventId,
         p_name: name.trim(),
-        p_visibility: visibility as any,
+        p_visibility: 'event' as any,
         p_recipients: chosenRecipients,
-        // Hidden recipients removed under the new model:
         p_hidden_recipients: [] as string[],
-        // When not restricting, pass empty array so RPC won’t write list_viewers.
-        p_viewers: restrict ? allowedViewers : [],
-      };
-
-      console.log('[CreateList] payload', payload);
-
-      const { data: newListId, error } = await supabase.rpc('create_list_with_people', payload);
-
-      if (error) {
-        const msg = String(error.message || error);
-        if (msg.includes('not_an_event_member')) {
-          toast.error('You’re not a member of this event.');
-        } else {
-          toast.error('Create failed', msg);
-        }
+        p_viewers: [] as string[],
+      });
+      if (rpcErr) {
+        const msg = String(rpcErr.message || rpcErr);
+        if (msg.includes('not_an_event_member')) toast.error('You’re not a member of this event.');
+        else toast.error('Create failed', msg);
         return;
       }
       if (!newListId) {
         toast.error('Create failed', 'No list id returned.');
         return;
+      }
+
+      // Exclusions: we’re reusing viewerIds as “excluded” toggles
+      const excludedUserIds = Object.keys(viewerIds).filter(uid => !!viewerIds[uid]);
+      console.log('[CreateList] excludedUserIds:', excludedUserIds);
+
+      // Insert exclusions if any were set
+      if (excludedUserIds.length) {
+        const rows = excludedUserIds.map(uid => ({ list_id: newListId, user_id: uid }));
+        const { error: exclErr } = await supabase.from('list_exclusions').insert(rows);
+        if (exclErr) throw exclErr;
       }
 
       toast.success('List created', 'Your list was created successfully.');
@@ -179,7 +150,7 @@ export default function CreateListScreen({ route, navigation }: any) {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f8fa' }}>
-      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 120 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
         {/* Card */}
         <View
           style={{
@@ -208,7 +179,7 @@ export default function CreateListScreen({ route, navigation }: any) {
           {/* Divider */}
           <View style={{ height: 1, backgroundColor: '#eef2f7', marginVertical: 4 }} />
 
-          {/* Recipients (chips, no Hidden/Show) */}
+          {/* Recipients (chips) */}
           <Text style={{ fontWeight: '700' }}>Recipients (who this list is for)</Text>
           <Text style={{ fontSize: 12, color: '#6b7280', marginTop: -4, marginBottom: 8 }}>
             Tap to select one or more recipients.
@@ -290,11 +261,11 @@ export default function CreateListScreen({ route, navigation }: any) {
 
               <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
                 {membersWithNames.map(m => {
-                  const excluded = !!viewerIds[m.user_id]; // reusing viewerIds as "excludedIds"
+                  const excluded = !!viewerIds[m.user_id]; // reusing viewerIds as "excluded" set
                   return (
                     <Pressable
                       key={`exclude-${m.user_id}`}
-                      onPress={() => toggleViewer(m.user_id)} // reusing toggleViewer to toggle exclusion
+                      onPress={() => toggleViewer(m.user_id)}
                       style={{
                         marginRight: 8,
                         marginBottom: 8,
@@ -318,12 +289,29 @@ export default function CreateListScreen({ route, navigation }: any) {
 
           {/* Create button */}
           <View style={{ marginTop: 8 }}>
-            <Button
-              title={submitting ? 'Creating…' : 'Create List'}
+            <Pressable
               onPress={create}
               disabled={submitting}
-            />
+              style={{
+                backgroundColor: '#2e95f1',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 10,
+                alignItems: 'center',
+                opacity: submitting ? 0.7 : 1,
+              }}
+            >
+              {submitting ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                  <ActivityIndicator color="#fff" />
+                  <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>Creating…</Text>
+                </View>
+              ) : (
+                <Text style={{ color: '#fff', fontWeight: '700' }}>Create List</Text>
+              )}
+            </Pressable>
           </View>
+
         </View>
       </ScrollView>
     </View>

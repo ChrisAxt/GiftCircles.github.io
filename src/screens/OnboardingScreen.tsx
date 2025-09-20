@@ -171,11 +171,11 @@ function CreateEventMock() {
       <FakeInput placeholder="Wed, Dec 18, 2025" narrow />
       <View style={{ height: 10 }} />
       <Label>Recurs</Label>
-      <View style={{ flexDirection: 'row', gap: 8 }}>
-        <FakeButton title="None" tone="muted" />
-        <FakeButton title="Weekly" tone="muted" />
-        <FakeButton title="Monthly" tone="muted" />
-        <FakeButton title="Yearly" tone="muted" />
+      <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4, marginTop: 2 }}>
+        <FakeButton title="None"    tone="muted" style={{ margin: 4 }} />
+        <FakeButton title="Weekly"  tone="muted" style={{ margin: 4 }} />
+        <FakeButton title="Monthly" tone="muted" style={{ margin: 4 }} />
+        <FakeButton title="Yearly"  tone="muted" style={{ margin: 4 }} />
       </View>
       <View style={{ height: 14 }} />
       <FormButton title="Create" />
@@ -202,7 +202,7 @@ function CreateListMock() {
         <FakeButton title="Selected people" tone="muted" />
       </View>
       <View style={{ height: 14 }} />
-      <FakeButton title="Create list" />
+      <FormButton title="Create list" />
     </Card>
   );
 }

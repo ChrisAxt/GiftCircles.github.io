@@ -5,6 +5,7 @@ import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 import ClaimButton from '../components/ClaimButton';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 type Item = {
   id: string;
@@ -34,9 +35,11 @@ export default function ListDetailScreen({ route, navigation }: any) {
   const [listEventId, setListEventId] = useState<string | null>(null);
 
   const [claimedSummary, setClaimedSummary] = useState<{ claimed: number; unclaimed: number }>({ claimed: 0, unclaimed: 0 });
-  const [claimedByName, setClaimedByName] = useState<Record<string, string>>({}); // (not shown in UI yet)
+  const [claimedByName, setClaimedByName] = useState<Record<string, string>>({});
   const itemIdsRef = useRef<Set<string>>(new Set());
+  const insets = useSafeAreaInsets();
 
+  // Stable loader: depends only on list id
   const load = useCallback(async () => {
     setLoading(true);
     setErrorMsg(null);
@@ -93,21 +96,27 @@ export default function ListDetailScreen({ route, navigation }: any) {
       const itemIds = (its ?? []).map(i => i.id);
       itemIdsRef.current = new Set(itemIds);
 
-      // Claims
+      // Claims via RPC (visibility-aware)
       let claimsMap: Record<string, Claim[]> = {};
       if (itemIds.length) {
-        const { data: cls, error: claimsErr } = await supabase
-          .from('claims')
-          .select('*')
-          .in('item_id', itemIds);
+        const { data: claimRows, error: claimsErr } = await supabase
+          .rpc('list_claims_for_user', { p_item_ids: itemIds });
         if (claimsErr) throw claimsErr;
-        (cls ?? []).forEach((c) => { (claimsMap[c.item_id] ||= []).push(c as Claim); });
+
+        (claimRows ?? []).forEach((r: { item_id: string; claimer_id: string }) => {
+          const arr = (claimsMap[r.item_id] ||= []);
+          arr.push({
+            id: `${r.item_id}:${r.claimer_id}`,
+            item_id: r.item_id,
+            claimer_id: r.claimer_id
+          } as Claim);
+        });
         setClaimsByItem(claimsMap);
       } else {
         setClaimsByItem({});
       }
 
-      // Summary
+      // Summary (from fresh claimsMap)
       const totalItems = (its ?? []).length;
       const claimedCount = (its ?? []).reduce((acc, it) => acc + ((claimsMap[it.id]?.length ?? 0) > 0 ? 1 : 0), 0);
       setClaimedSummary({ claimed: claimedCount, unclaimed: Math.max(0, totalItems - claimedCount) });
@@ -121,7 +130,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
         .maybeSingle();
       setIsRecipient(!!r);
 
-      // Names for “Claimed by: Name”
+      // Names for “Claimed by: Name” (build from fresh claimsMap)
       const claimerIds = Array.from(
         new Set(Object.values(claimsMap).flat().map(c => c.claimer_id).filter(Boolean))
       ) as string[];
@@ -131,8 +140,10 @@ export default function ListDetailScreen({ route, navigation }: any) {
           .select('id, display_name')
           .in('id', claimerIds);
         if (pErr) throw pErr;
+
         const nameById: Record<string, string> = {};
         (profs ?? []).forEach(p => { nameById[p.id] = (p.display_name ?? '').trim(); });
+
         const byItem: Record<string, string> = {};
         for (const [itemId, cl] of Object.entries(claimsMap)) {
           if (!cl?.length) continue;
@@ -153,16 +164,13 @@ export default function ListDetailScreen({ route, navigation }: any) {
     }
   }, [id]);
 
-  // ------ permissions & delete handlers (component scope) ------
+  // perms & delete handlers
   const canDeleteItem = useCallback((item: Item) => {
     if (!myUserId) return false;
     return item.created_by === myUserId || isOwner || isAdmin;
   }, [myUserId, isOwner, isAdmin]);
 
   const deleteItem = useCallback(async (item: Item) => {
-    console.log('[DeleteItem] pressed', { itemId: item.id, name: item.name });
-
-    // Simple confirm (works on mobile & web)
     let confirmed = true;
     if (Platform.OS === 'web') {
       confirmed = typeof window !== 'undefined' ? window.confirm(`Delete "${item.name}"?`) : true;
@@ -178,40 +186,20 @@ export default function ListDetailScreen({ route, navigation }: any) {
         );
       });
     }
-    if (!confirmed) {
-      console.log('[DeleteItem] cancelled');
-      return;
-    }
+    if (!confirmed) return;
 
     try {
-      console.log('[DeleteItem] calling RPC delete_item', { p_item_id: item.id });
       const { error: rpcErr } = await supabase.rpc('delete_item', { p_item_id: item.id });
-      console.log('[DeleteItem] RPC result', { rpcErr });
-
       if (rpcErr) {
         const msg = String(rpcErr.message || rpcErr);
-        // Give a clear reason
-        if (msg.includes('not_authorized')) {
-          toast.error('Not allowed', 'You cannot delete this item.');
-          return;
-        }
-        if (msg.includes('has_claims')) {
-          toast.info('Cannot delete', 'Unclaim first or ask an admin/list owner.');
-          return;
-        }
-        if (msg.includes('not_found')) {
-          toast.info('Already gone', 'This item no longer exists.');
-        } else {
-          toast.error('Delete failed', msg);
-        }
+        if (msg.includes('not_authorized')) return toast.error('Not allowed', 'You cannot delete this item.');
+        if (msg.includes('has_claims')) return toast.info('Cannot delete', 'Unclaim first or ask an admin/list owner.');
+        if (msg.includes('not_found')) toast.info('Already gone', 'This item no longer exists.');
+        else toast.error('Delete failed', msg);
 
-        // 🔧 Fallback: try direct delete so we can see any RLS error text
-        console.log('[DeleteItem] trying direct delete fallback…');
+        // Fallback to reveal RLS errors
         const { error: directErr } = await supabase.from('items').delete().eq('id', item.id);
-        console.log('[DeleteItem] direct delete result', { directErr });
-        if (directErr) {
-          toast.error('Direct delete blocked', directErr.message ?? String(directErr));
-        }
+        if (directErr) toast.error('Direct delete blocked', directErr.message ?? String(directErr));
         await load();
         return;
       }
@@ -219,13 +207,11 @@ export default function ListDetailScreen({ route, navigation }: any) {
       toast.success('Item deleted');
       await load();
     } catch (e: any) {
-      console.log('[DeleteItem] EXCEPTION', e);
       toast.error('Delete failed', e?.message ?? String(e));
     }
   }, [load]);
 
-
-  // ------ realtime subscriptions ------
+  // realtime — subscribe once per list id
   useEffect(() => {
     const ch = supabase
       .channel(`list-realtime-${id}`)
@@ -235,8 +221,9 @@ export default function ListDetailScreen({ route, navigation }: any) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'claims' }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [id, load]);
+  }, [id]); // IMPORTANT: only [id]
 
+  // delete list
   const doDelete = useCallback(async () => {
     try {
       const { error } = await supabase.rpc('delete_list', { p_list_id: id });
@@ -272,7 +259,8 @@ export default function ListDetailScreen({ route, navigation }: any) {
     );
   }, [doDelete]);
 
-  useFocusEffect(useCallback(() => { load(); }, [load]));
+  // initial/focus load — depend on id
+  useFocusEffect(useCallback(() => { load(); }, [id]));
 
   useLayoutEffect(() => {
     navigation.setOptions({
@@ -285,8 +273,6 @@ export default function ListDetailScreen({ route, navigation }: any) {
         ) : null,
     });
   }, [navigation, listName, isOwner, confirmDelete]);
-
-  // (Optional) local claim toggle helpers not used when ClaimButton component handles it
 
   // ----------------- UI -----------------
   if (loading) {
@@ -310,8 +296,20 @@ export default function ListDetailScreen({ route, navigation }: any) {
   return (
     <View style={{ flex: 1, backgroundColor: '#f6f8fa' }}>
       <View style={{ padding: 16 }}>
-        <Button title="Add Item" onPress={() => navigation.navigate('AddItem', { listId: id, listName })} />
+        <Pressable
+          onPress={() => navigation.navigate('AddItem', { listId: id, listName })}
+          style={{
+            backgroundColor: '#2e95f1',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 10,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Add Item</Text>
+        </Pressable>
       </View>
+
 
       {/* Claimed/Unclaimed summary — hidden from recipients */}
       {!isRecipient && (
@@ -325,10 +323,9 @@ export default function ListDetailScreen({ route, navigation }: any) {
       <FlatList
         data={items}
         keyExtractor={(i) => String(i.id)}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
         renderItem={({ item }) => {
           const claims = claimsByItem[item.id] ?? [];
-          const claimed = claims.length > 0;
 
           return (
             <View style={{
@@ -365,10 +362,8 @@ export default function ListDetailScreen({ route, navigation }: any) {
                 <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ opacity: 0.7 }}>
                     {(() => {
-                      const claims = claimsByItem[item.id] ?? [];
-                      const claimed = claims.length > 0;
                       const mine = myUserId ? claims.some(c => c.claimer_id === myUserId) : false;
-                      if (!claimed) return 'Not claimed yet';
+                      if (!claims.length) return 'Not claimed yet';
                       return mine ? 'Claimed by: You' : `Claimed by: ${claimedByName[item.id] ?? 'Someone'}`;
                     })()}
                   </Text>
@@ -376,7 +371,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
                   <ClaimButton
                     itemId={item.id}
                     claims={claimsByItem[item.id] ?? []}
-                    meId={myUserId}          // 👈 pass current user id to compute mine/disabled
+                    meId={myUserId}
                     onChanged={load}
                   />
                 </View>

@@ -273,12 +273,31 @@ export default function EditEventScreen({ route, navigation }: any) {
 
         {/* Save */}
         <View style={{ marginTop: 12 }}>
-          <Button
-            title={!isAdmin ? 'View only (not admin)' : saving ? 'Saving…' : 'Save changes'}
+          <Pressable
             onPress={save}
             disabled={!isAdmin || saving}
-          />
+            style={{
+              backgroundColor: !isAdmin ? '#eef2f7' : '#2e95f1',
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              opacity: saving ? 0.7 : 1,
+            }}
+          >
+            {!isAdmin ? (
+              <Text style={{ color: '#1f2937', fontWeight: '700' }}>View only (not admin)</Text>
+            ) : saving ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>Saving…</Text>
+              </View>
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '700' }}>Save changes</Text>
+            )}
+          </Pressable>
         </View>
+
       </View>
     </View>
   );

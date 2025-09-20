@@ -1,26 +1,32 @@
 // src/screens/EventDetailScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState, useLayoutEffect } from 'react';
-import { View, Text, FlatList, Button, Pressable, Alert, ActivityIndicator, Share, Animated, Easing, ImageBackground } from 'react-native';
+import {
+  View, Text, FlatList, Button, Pressable, Alert, ActivityIndicator, Share, Animated, Easing,
+  ImageBackground, StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform,
+  TouchableWithoutFeedback, Keyboard,
+} from 'react-native';
 import { useFocusEffect } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { Event } from '../types';
 import ListCard from '../components/ListCard';
 import { pickEventImage } from '../theme/eventImages';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchClaimCountsByList } from '../lib/claimCounts';
+import { sendInviteEmail } from '../lib/email';
+import { useSession } from '../hooks/useSession';
 
 type MemberRow = { event_id: string; user_id: string; role: 'giver' | 'recipient' | 'admin' };
 type ListRow = { id: string; event_id: string; name: string };
-type EventTheme = { key: string; colors: string[]; textColor: string; emoji?: string };
+type EventTheme = { key: string; colors: string[]; textColor: string; };
+
 const IMAGE_OPACITY = 0.2;
 function getEventTheme(title?: string): EventTheme {
   const t = (title || '').toLowerCase();
-  if (/(x-?mas|christmas|noel)/.test(t)) return { key: 'christmas', colors: [], textColor: '#ffffff', emoji: '🎄' };
-  if (/(birthday|b-?day|bday)/.test(t))  return { key: 'birthday',  colors: [], textColor: '#ffffff', emoji: '🎂' };
-  if (/(wedding|marriage|anniversary)/.test(t)) return { key: 'wedding', colors: [], textColor: '#1f2937', emoji: '💍' };
-  if (/(baby|shower)/.test(t))          return { key: 'baby',      colors: [], textColor: '#1f2937', emoji: '👶' };
-  if (/(valentine|valentines)/.test(t)) return { key: 'valentine', colors: [], textColor: '#ffffff', emoji: '❤️' };
-  if (/(easter)/.test(t))               return { key: 'easter',    colors: [], textColor: '#1f2937', emoji: '🐣' };
-  if (/(new[-\s]?year)/.test(t))        return { key: 'newyear',   colors: [], textColor: '#ffffff', emoji: '🥂' };
-  return { key: 'default', colors: [], textColor: '#111111' };
+  if (/(x-?mas|christmas|noel)/.test(t)) return { key: 'christmas', colors: [], textColor: '#ffffff' };
+  if (/(birthday|b-?day|bday)/.test(t)) return { key: 'birthday', colors: [], textColor: '#ffffff' };
+  if (/(wedding|marriage|anniversary)/.test(t)) return { key: 'wedding', colors: [], textColor: '#ffffff' };
+  if (/(baby|shower)/.test(t)) return { key: 'baby', colors: [], textColor: '#ffffff' };
+  return { key: 'default', colors: [], textColor: '#ffffff' };
 }
 
 export default function EventDetailScreen({ route, navigation }: any) {
@@ -37,6 +43,20 @@ export default function EventDetailScreen({ route, navigation }: any) {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [membersOpen, setMembersOpen] = useState(false);
   const membersOpacity = React.useRef(new Animated.Value(0)).current;
+  const insets = useSafeAreaInsets();
+
+  // Invite modal state
+  const [inviteOpen, setInviteOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [sending, setSending] = useState<boolean>(false);
+  const openInvitePopup = () => setInviteOpen(true);
+  const closeInvitePopup = () => setInviteOpen(false);
+
+  const sessionCtx = useSession(); // may be null initially
+  const inviterName =
+    sessionCtx?.profile?.full_name ??
+    sessionCtx?.profile?.display_name ??
+    'Someone';
 
   const toggleMembers = () => {
     const opening = !membersOpen;
@@ -134,20 +154,14 @@ export default function EventDetailScreen({ route, navigation }: any) {
       setItemCountByList(ic);
 
       // Claims
-      const flatItemIds = Object.values(itemIdsByList).flat();
-      const { data: claims, error: cErr } = flatItemIds.length
-        ? await supabase.from('claims').select('id,item_id').in('item_id', flatItemIds)
-        : { data: [], error: null as any };
-      if (cErr) throw cErr;
+      try {
+        const cc = await fetchClaimCountsByList(listIds);
+        setClaimCountByList(cc);
+      } catch (cErr: any) {
+        console.log('[EventDetail] claim counts RPC error', cErr);
+        setClaimCountByList({});
+      }
 
-      const listIdByItem: Record<string, string> = {};
-      (items ?? []).forEach(i => { listIdByItem[i.id] = i.list_id; });
-      const cc: Record<string, number> = {};
-      (claims ?? []).forEach(c => {
-        const lid = listIdByItem[c.item_id];
-        cc[lid] = (cc[lid] || 0) + 1;
-      });
-      setClaimCountByList(cc);
     } catch (err: any) {
       console.error('EventDetail load()', err);
       if (err?.code === 'PGRST116') { navigation.goBack(); return; }
@@ -240,9 +254,83 @@ export default function EventDetailScreen({ route, navigation }: any) {
     navigation.push('EditEvent', { id });
   }, [id, navigation]);
 
-  const shareCode = async () => {
+  // ---- Invite actions
+
+  // Normalize anything into YYYY-MM-DD, or return undefined.
+  function toISODate(input: any): string | undefined {
+    if (input == null) return undefined;
+    if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.trim())) return input.trim();
+
+    const d =
+      input instanceof Date
+        ? input
+        : typeof input === 'number'
+          ? new Date(input < 1e12 ? input * 1000 : input)
+          : new Date(String(input));
+
+    if (!Number.isFinite(d.getTime())) return undefined;
+
+    const y = d.getUTCFullYear();
+    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
+    const day = String(d.getUTCDate()).padStart(2, '0');
+    return `${y}-${m}-${day}`;
+  }
+
+  // Try common date field names; you can collapse this to just `event.event_date` if that's guaranteed.
+  function pickEventDate(ev: any): string | undefined {
+    const candidates = [
+      ev?.event_date, ev?.date, ev?.day, ev?.when, ev?.start_date, ev?.scheduled_at,
+    ];
+    for (const c of candidates) {
+      const isoDate = toISODate(c);
+      if (isoDate) return isoDate;
+    }
+    return undefined;
+  }
+
+  const handleSendCode = async () => {
     if (!event?.join_code) return;
-    Share.share({ message: `Join my event "${event.title}": code ${event.join_code}` });
+    await Share.share({
+      message: `Join my event "${event.title}": code ${event.join_code}`,
+    });
+    closeInvitePopup();
+  };
+
+  const handleSendEmail = async () => {
+    console.log('Send email pressed');
+    if (!inviteEmail?.trim()) {
+      Alert.alert('Missing email', 'Please enter an email address.');
+      return;
+    }
+    if (!event) return;
+
+    const eventDate = pickEventDate(event); // date-only; optional
+
+    setSending(true);
+    try {
+      const res = await sendInviteEmail({
+        to: inviteEmail.trim(),
+        inviterName,
+        eventName: event.title,
+        eventTimezone: 'Europe/Stockholm',
+        locationText: (event as any).location ?? undefined,
+        eventUrl: `https://giftcircles.app/join?code=${encodeURIComponent(event.join_code)}`,
+        eventDate, // pass date-only if available
+      } as any);
+
+      if ((res as any)?.ok) {
+        Alert.alert('Invite sent', 'We’ve emailed your invite.');
+        setInviteEmail('');
+        setInviteOpen(false);
+      } else {
+        const msg = (res as any)?.error || 'Unknown error';
+        Alert.alert('Send failed', msg);
+      }
+    } catch (e: any) {
+      Alert.alert('Send failed', e?.message ?? String(e));
+    } finally {
+      setSending(false);
+    }
   };
 
   // Remove member (admin/owner)
@@ -309,7 +397,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f6f8fa'}}>
+    <View style={{ flex: 1, backgroundColor: '#f6f8fa' }}>
       {/* Header card with image (no gradients) */}
       {(() => {
         const th = getEventTheme(event?.title);
@@ -318,12 +406,26 @@ export default function EventDetailScreen({ route, navigation }: any) {
         const frameStyle = {
           margin: 16,
           borderRadius: 16,
-          overflow: 'hidden' as const, // clip corners
-          elevation: 2,
+          overflow: 'hidden' as const,
+          backgroundColor: 'rgba(0,0,0,0.8)',
         };
+        const styles = StyleSheet.create({
+          button: {
+            paddingVertical: 8,
+            paddingHorizontal: 18,
+            borderRadius: 18,
+            alignItems: 'center',
+            justifyContent: 'center',
+          },
+          text: {
+            color: '#fff',
+            fontWeight: 'bold',
+            fontSize: 16,
+          },
+        });
 
-        const textColor = th.key !== 'default' ? th.textColor : '#111111';
-        const subTextColor = th.key !== 'default' ? th.textColor : '#5b6b7b';
+        const textColor = th.textColor;
+        const subTextColor = th.textColor;
 
         if (img) {
           return (
@@ -331,21 +433,19 @@ export default function EventDetailScreen({ route, navigation }: any) {
               <ImageBackground
                 source={img}
                 resizeMode="cover"
-                style={{}} // no background, no padding here
-                imageStyle={{ borderRadius: 16, opacity:0.8}} // no opacity; no overlay
+                style={{}}
+                imageStyle={{ margin: 0, borderRadius: 16, opacity: 0.5 }}
               >
-                {/* Content wrapper only adds padding; no background color */}
                 <View style={{ padding: 16 }}>
-                  {/* Title + optional emoji */}
+                  {/* Title */}
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    {th.emoji ? <Text style={{ color: textColor, fontSize: 20 }}>{th.emoji}</Text> : null}
-                    <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{event?.title}</Text>
+                    <Text style={{ color: textColor, fontSize: 22, fontWeight: '800' }}>{event?.title}</Text>
                   </View>
 
-                  {/* Date */}
-                  {event?.event_date ? (
-                    <Text style={{ color: subTextColor }}>
-                      {new Date(event.event_date).toLocaleDateString(undefined, {
+                  {/* Date (date-only) */}
+                  {(event as any)?.event_date ? (
+                    <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>
+                      {new Date((event as any).event_date).toLocaleDateString(undefined, {
                         weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
                       })}
                     </Text>
@@ -353,28 +453,33 @@ export default function EventDetailScreen({ route, navigation }: any) {
 
                   {/* Actions */}
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                    <Button color="#32CD32" title="Share" onPress={shareCode} />
-                    <Button color="#9a6700" title="Leave" onPress={leaveEvent} />
+                    <Pressable style={[styles.button, { backgroundColor: '#32CD32' }]} onPress={openInvitePopup}>
+                      <Text style={styles.text}>Share</Text>
+                    </Pressable>
+
+                    <Pressable style={[styles.button, { backgroundColor: '#ff7373' }]} onPress={leaveEvent}>
+                      <Text style={styles.text}>Leave</Text>
+                    </Pressable>
                   </View>
 
                   {/* Stats */}
                   <View style={{ flexDirection: 'row', gap: 20, marginTop: 12 }}>
                     <View>
-                      <Text style={{ color: textColor, fontSize: 18, fontWeight: '800' }}>{memberCount}</Text>
-                      <Text style={{ color: subTextColor }}>Members</Text>
+                      <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{memberCount}</Text>
+                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>Members</Text>
                     </View>
                     <View>
-                      <Text style={{ color: textColor, fontSize: 18, fontWeight: '800' }}>{totalItems}</Text>
-                      <Text style={{ color: subTextColor }}>Items</Text>
+                      <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{totalItems}</Text>
+                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>Items</Text>
                     </View>
                     <View>
-                      <Text style={{ color: textColor, fontSize: 18, fontWeight: '800' }}>{totalClaimsVisible}</Text>
-                      <Text style={{ color: subTextColor }}>Claimed</Text>
+                      <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{totalClaimsVisible}</Text>
+                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>Claimed</Text>
                     </View>
                   </View>
 
                   <View style={{ marginTop: 8 }}>
-                    <Text style={{ color: subTextColor }}>
+                    <Text style={{ color: subTextColor, fontStyle: 'italic' }}>
                       {isAdmin ? 'You are an admin of this event.' : 'Member access'}
                     </Text>
                   </View>
@@ -383,46 +488,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
             </View>
           );
         }
-
-        // Fallback: no image → plain white card
-        return (
-          <View style={{ backgroundColor: 'white', padding: 16, margin: 16, borderRadius: 16, gap: 8, elevation: 2 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              {th.emoji ? <Text style={{ color: '#111', fontSize: 20 }}>{th.emoji}</Text> : null}
-              <Text style={{ color: '#111', fontSize: 20, fontWeight: '800' }}>{event?.title}</Text>
-            </View>
-            {event?.event_date ? (
-              <Text style={{ color: '#5b6b7b' }}>
-                {new Date(event.event_date).toLocaleDateString(undefined, {
-                  weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                })}
-              </Text>
-            ) : null}
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-              <Button color="#32CD32" title="Share" onPress={shareCode} />
-              <Button color="#9a6700" title="Leave" onPress={leaveEvent} />
-            </View>
-            <View style={{ flexDirection: 'row', gap: 20, marginTop: 12 }}>
-              <View>
-                <Text style={{ fontSize: 18, fontWeight: '800' }}>{memberCount}</Text>
-                <Text style={{ color: '#5b6b7b' }}>Members</Text>
-              </View>
-              <View>
-                <Text style={{ fontSize: 18, fontWeight: '800' }}>{totalItems}</Text>
-                <Text style={{ color: '#5b6b7b' }}>Items</Text>
-              </View>
-              <View>
-                <Text style={{ fontSize: 18, fontWeight: '800' }}>{totalClaimsVisible}</Text>
-                <Text style={{ color: '#5b6b7b' }}>Claimed</Text>
-              </View>
-            </View>
-            <View style={{ marginTop: 8 }}>
-              <Text style={{ color: '#5b6b7b' }}>
-                {isAdmin ? 'You are an admin of this event.' : 'Member access'}
-              </Text>
-            </View>
-          </View>
-        );
+        return null;
       })()}
 
       {/* Members (collapsible, fade only) */}
@@ -516,16 +582,31 @@ export default function EventDetailScreen({ route, navigation }: any) {
       </View>
 
       {/* Actions */}
-      <View style={{ paddingHorizontal: 16, marginBottom: 8, marginTop: 8 }}>
-        <Button title="Create List" onPress={() => navigation.navigate('CreateList', { eventId: id })} />
+      <View style={{ paddingHorizontal: 16, marginBottom: insets.bottom + 8, marginTop: 8 }}>
+        <Pressable
+          onPress={() => navigation.navigate('CreateList', { eventId: id })}
+          style={{
+            backgroundColor: '#2e95f1',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 10,
+            alignItems: 'center',
+          }}
+        >
+          <Text style={{ color: '#fff', fontWeight: '700' }}>Create List</Text>
+        </Pressable>
       </View>
 
-      {/* Lists section */}
-      <View style={{ paddingHorizontal: 16, paddingBottom: 24 }}>
+      {/* Lists section (now scrollable) */}
+      <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}>
         <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8 }}>Lists</Text>
+
         <FlatList
+          style={{ flex: 1 }}
           data={lists}
           keyExtractor={(l) => l.id}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+          keyboardShouldPersistTaps="handled"
           renderItem={({ item }) => {
             const recipientIds = recipientsByList[item.id] ?? [];
             const recipientNames = recipientIds
@@ -553,6 +634,77 @@ export default function EventDetailScreen({ route, navigation }: any) {
           }
         />
       </View>
+
+      {/* Invite modal */}
+      <Modal
+        visible={inviteOpen}
+        transparent
+        animationType="fade"
+        statusBarTranslucent
+        presentationStyle="overFullScreen"
+        onRequestClose={closeInvitePopup}
+      >
+        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+          <View
+            style={{
+              flex: 1,
+              backgroundColor: 'rgba(0,0,0,0.4)',
+              justifyContent: 'center',
+              padding: 20,
+            }}
+            pointerEvents="auto"
+          >
+            <KeyboardAvoidingView
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              style={{ width: '100%' }}
+            >
+              <View
+                style={{
+                  backgroundColor: 'white',
+                  borderRadius: 12,
+                  padding: 16,
+                  ...Platform.select({ android: { elevation: 6 }, ios: { zIndex: 10 } }),
+                }}
+              >
+                <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
+                  Invite options
+                </Text>
+
+                <Text style={{ marginBottom: 6 }}>Send email</Text>
+                <TextInput
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  placeholder="name@example.com"
+                  value={inviteEmail}
+                  onChangeText={setInviteEmail}
+                  style={{
+                    borderWidth: 1,
+                    borderColor: '#ddd',
+                    borderRadius: 8,
+                    paddingHorizontal: 10,
+                    paddingVertical: 8,
+                    marginBottom: 12,
+                  }}
+                  returnKeyType="send"
+                  onSubmitEditing={handleSendEmail}
+                />
+
+                <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                  <Pressable onPress={closeInvitePopup} hitSlop={10} style={{ padding: 10 }}>
+                    <Text>Cancel</Text>
+                  </Pressable>
+                  <Pressable onPress={handleSendEmail} disabled={sending} style={{ padding: 10 }}>
+                    <Text style={{ fontWeight: '600' }}>{sending ? 'Sending…' : 'Send email'}</Text>
+                  </Pressable>
+                  <Pressable onPress={handleSendCode} disabled={sending} style={{ padding: 10 }}>
+                    <Text style={{ fontWeight: '600' }}>Send code</Text>
+                  </Pressable>
+                </View>
+              </View>
+            </KeyboardAvoidingView>
+          </View>
+        </TouchableWithoutFeedback>
+      </Modal>
     </View>
   );
 }

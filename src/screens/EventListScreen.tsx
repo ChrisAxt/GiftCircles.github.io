@@ -8,6 +8,8 @@ import { Event } from '../types';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventCard from '../components/EventCard';
 import { toast } from '../lib/toast';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { fetchClaimCountsByList } from '../lib/claimCounts';
 
 // simple stat tile
 function StatCard({ title, value }: { title: string; value: number | string }) {
@@ -18,7 +20,6 @@ function StatCard({ title, value }: { title: string; value: number | string }) {
     </View>
   );
 }
-
 
 type MemberRow = { event_id: string; user_id: string };
 
@@ -32,27 +33,27 @@ export default function EventListScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const insets = useSafeAreaInsets();
 
-const ensureProfileName = async () => {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return;
+  const ensureProfileName = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
 
     // Fetch current display_name
     const { data: prof } = await supabase
-        .from('profiles')
-        .select('display_name')
-        .eq('id', user.id)
-        .maybeSingle();
+      .from('profiles')
+      .select('display_name')
+      .eq('id', user.id)
+      .maybeSingle();
 
-        const emailPrefix = (user.email?.split('@')[0] ?? '').trim();
-        const metaName = (user.user_metadata?.name ?? '').trim();
+    const emailPrefix = (user.email?.split('@')[0] ?? '').trim();
+    const metaName = (user.user_metadata?.name ?? '').trim();
 
-        // If display_name is missing or equals the email prefix, and we have a better name in metadata → set it
-        if (metaName && (!prof?.display_name || prof.display_name === emailPrefix)) {
-        await supabase.rpc('set_profile_name', { p_name: metaName });
-        }
-    };
-
+    // If display_name is missing or equals the email prefix, and we have a better name in metadata → set it
+    if (metaName && (!prof?.display_name || prof.display_name === emailPrefix)) {
+      await supabase.rpc('set_profile_name', { p_name: metaName });
+    }
+  };
 
   const load = async () => {
     setLoading(true);
@@ -70,7 +71,8 @@ const ensureProfileName = async () => {
       // who am I (for greeting)? -> prefer metadata.name immediately, then profile, then email
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
-      console.log('user meta name:', user.user_metadata?.name);
+      const myId = user?.id ?? null;
+      console.log('user meta name:', user?.user_metadata?.name);
 
       if (user) {
         const metaName = (user.user_metadata?.name ?? '').trim();
@@ -122,13 +124,6 @@ const ensureProfileName = async () => {
       setEvents(es ?? []);
       const eventIds = (es ?? []).map(e => e.id);
 
-      if (!eventIds.length) {
-        setMemberMap({});
-        setItemCountByEvent({});
-        setClaimsByEvent({});
-        return;
-      }
-
       // members
       const { data: members, error: mErr } = await supabase
         .from('event_members')
@@ -170,32 +165,43 @@ const ensureProfileName = async () => {
         : { data: [], error: null as any };
       if (iErr) throw iErr;
 
-      const eventIdByItem: Record<string, string> = {};
       const itemIdsByEvent: Record<string, string[]> = {};
-      const itemCount: Record<string, number> = {};
       (items ?? []).forEach((it) => {
         const evId = eventIdByList[it.list_id];
         if (!evId) return;
-        eventIdByItem[it.id] = evId;
         (itemIdsByEvent[evId] ||= []).push(it.id);
       });
+      const itemCount: Record<string, number> = {};
       Object.keys(itemIdsByEvent).forEach(evId => (itemCount[evId] = itemIdsByEvent[evId].length));
       setItemCountByEvent(itemCount);
 
-      // claims
-      const flatItemIds = Object.values(itemIdsByEvent).flat();
-      const { data: claims, error: cErr } = flatItemIds.length
-        ? await supabase.from('claims').select('id,item_id').in('item_id', flatItemIds)
-        : { data: [], error: null as any };
-      if (cErr) throw cErr;
+      // ===== FIXED: claims per event =====
+      // 1) Per-list claim counts
+      const listClaimCounts = listIds.length ? await fetchClaimCountsByList(listIds) : {};
 
-      const claimCountByEvent: Record<string, number> = {};
-      (claims ?? []).forEach((c) => {
-        const evId = eventIdByItem[c.item_id];
-        if (!evId) return;
-        claimCountByEvent[evId] = (claimCountByEvent[evId] || 0) + 1;
-      });
-      setClaimsByEvent(claimCountByEvent);
+      // 2) If I’m a recipient on a list, hide its claim count from my totals (match EventDetail behavior)
+      let iAmRecipientOnList = new Set<string>();
+      if (myId && listIds.length) {
+        const { data: myRecips, error: recipErr } = await supabase
+          .from('list_recipients')
+          .select('list_id')
+          .in('list_id', listIds)
+          .eq('user_id', myId);
+        if (recipErr) throw recipErr;
+        iAmRecipientOnList = new Set((myRecips ?? []).map(r => r.list_id));
+      }
+
+      // 3) Aggregate per-event
+      const claimsPerEvent: Record<string, number> = {};
+      for (const listId of listIds) {
+        if (!eventIdByList[listId]) continue;
+        const count = listClaimCounts[listId] ?? 0;
+        // Skip lists where I'm a recipient
+        if (iAmRecipientOnList.has(listId)) continue;
+        claimsPerEvent[eventIdByList[listId]] = (claimsPerEvent[eventIdByList[listId]] || 0) + count;
+      }
+      setClaimsByEvent(claimsPerEvent);
+
     } catch (err: any) {
       console.error('EventList load()', err);
       // show details as text2
@@ -290,16 +296,16 @@ const ensureProfileName = async () => {
         data={events}
         keyExtractor={(e) => e.id}
         refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
         renderItem={({ item }) => {
           const members = memberMap[item.id] ?? [];
           const totalItems = itemCountByEvent[item.id] || 0;
           const claimCount = claimsByEvent[item.id] || 0;
           const memberDisplayTokens = members.map(m => {
-                const uid = m.user_id;
-                const initial = initialFor(uid); // uses profileNames map you already populated
-                return `${initial}:${uid}`;
-              });
+            const uid = m.user_id;
+            const initial = initialFor(uid); // uses profileNames map you already populated
+            return `${initial}:${uid}`;
+          });
           return (
             <EventCard
               title={item.title}

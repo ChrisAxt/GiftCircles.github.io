@@ -1,8 +1,9 @@
 // src/screens/AddItemScreen.tsx
 import { useState } from 'react';
-import { View, TextInput, Button, Alert } from 'react-native';
+import { View, Alert, Pressable, ActivityIndicator, Text } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
+import { LabeledInput, LabeledPressableField } from '../components/LabeledInput';
 
 export default function AddItemScreen({ route, navigation }: any) {
   const { listId } = route.params as { listId: string };
@@ -106,8 +107,29 @@ export default function AddItemScreen({ route, navigation }: any) {
         onChangeText={setNotes}
         multiline
       />
-
-      <Button title={submitting ? 'Adding…' : 'Add'} onPress={add} disabled={submitting} />
+      <View >
+        <Pressable
+          onPress={add}
+          disabled={submitting}
+          style={{
+            backgroundColor: '#2e95f1',
+            paddingVertical: 10,
+            paddingHorizontal: 16,
+            borderRadius: 10,
+            alignItems: 'center',
+            opacity: submitting ? 0.7 : 1,
+          }}
+        >
+          {submitting ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <ActivityIndicator color="#fff" />
+              <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>Adding…</Text>
+            </View>
+          ) : (
+            <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
+          )}
+        </Pressable>
+      </View>
     </View>
   );
 }

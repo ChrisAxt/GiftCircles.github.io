@@ -18,15 +18,25 @@ import CreateListScreen from '../screens/CreateListScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditEventScreen from '../screens/EditEventScreen';
 import FancyTabBar from '../components/FancyTabBar';
-import OnboardingScreen from '../screens/OnboardingScreen'; // ← NEW
+import OnboardingScreen from '../screens/OnboardingScreen';
+import AllListsScreen from '../screens/AllListsScreen';
+import MyClaimsScreen from '../screens/MyClaimsScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
 
 function Tabs() {
   return (
-    <Tab.Navigator screenOptions={{ headerShown: false }} tabBar={(p) => <FancyTabBar {...p} />}>
+    <Tab.Navigator
+      screenOptions={{
+        headerShown: false,
+        tabBarHideOnKeyboard: true, // ← NEW
+      }}
+      tabBar={(p) => <FancyTabBar {...p} />}
+    >
       <Tab.Screen name="Events" component={EventListScreen} />
+      <Tab.Screen name="Lists" component={AllListsScreen} />
+      <Tab.Screen name="Claimed" component={MyClaimsScreen} />
       <Tab.Screen name="Profile" component={ProfileScreen} />
     </Tab.Navigator>
   );
@@ -122,6 +132,7 @@ export default function RootNavigator() {
             <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ title: 'List' }} />
             <Stack.Screen name="AddItem" component={AddItemScreen} options={{ title: 'Add Item' }} />
             <Stack.Screen name="CreateList" component={CreateListScreen} options={{ title: 'Create List' }} />
+
           </>
         )}
       </Stack.Navigator>

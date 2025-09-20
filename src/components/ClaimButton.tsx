@@ -1,91 +1,87 @@
+// src/components/ClaimButton.tsx
 import React, { useMemo, useState } from 'react';
-import { Pressable, Text } from 'react-native';
+import { Pressable, Text, ActivityIndicator, View } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 
 type Claim = { id: string; item_id: string; claimer_id: string; created_at?: string };
 
-export default function ClaimButton({
-  itemId,
-  claims,
-  meId,           // 👈 new: pass current user id
-  onChanged,
-}: {
+type Props = {
   itemId: string;
   claims: Claim[];
-  meId?: string | null;
-  onChanged?: () => void;
-}) {
+  meId: string | null | undefined;
+  onChanged?: () => void; // call to refresh list after action
+};
+
+export default function ClaimButton({ itemId, claims, meId, onChanged }: Props) {
   const [busy, setBusy] = useState(false);
 
-  const mine = useMemo(
-    () => (meId ? claims.some(c => c.claimer_id === meId) : false),
-    [claims, meId]
-  );
-  const claimedByOther = useMemo(
-    () => claims.length > 0 && !mine,
-    [claims, mine]
-  );
+  const mine = useMemo(() => !!meId && claims.some(c => c.claimer_id === meId), [claims, meId]);
+  const isClaimed = claims.length > 0;
+  const disabled = isClaimed && !mine; // only claimer can unclaim; others blocked
 
   const label = mine ? 'Unclaim' : 'Claim';
+  const bg = disabled ? '#e5e7eb' : mine ? '#fde8e8' : '#e9f8ec';
+  const border = disabled ? '#e5e7eb' : mine ? '#f8c7c7' : '#bce9cb';
+  const fg = disabled ? '#9aa3af' : mine ? '#c0392b' : '#1f9e4a';
 
-  const onPress = async () => {
-    if (busy) return;
-    if (claimedByOther) {
-      // Someone else already claimed; do nothing (button is disabled too)
-      toast.info('Already claimed', 'Another member has claimed this.');
-      return;
-    }
-    setBusy(true);
+  const press = async () => {
+    if (busy || disabled) return;
     try {
-      const { data: { user }, error } = await supabase.auth.getUser();
-      if (error) throw error;
-      if (!user) {
-        toast.info('Sign in required', 'Please sign in to claim.');
+      setBusy(true);
+
+      // Use SECURITY DEFINER RPCs so RLS/visibility can’t block legit actions
+      const fn = mine ? 'unclaim_item' : 'claim_item';
+      const { error } = await supabase.rpc(fn, { p_item_id: itemId });
+
+      if (error) {
+        const msg = String(error.message || error);
+        if (msg.includes('not_authenticated')) {
+          toast.error('Sign in required', 'Please sign in and try again.');
+        } else if (msg.includes('not_authorized')) {
+          toast.error('Not allowed', 'Recipients cannot claim items on their own lists.');
+        } else {
+          toast.error('Action failed', msg);
+        }
         return;
       }
 
-      if (mine) {
-        const { error: delErr } = await supabase
-          .from('claims')
-          .delete()
-          .eq('item_id', itemId)
-          .eq('claimer_id', user.id);
-        if (delErr) throw delErr;
-        toast.success('Unclaimed');
-      } else {
-        const { error: insErr } = await supabase
-          .from('claims')
-          .insert({ item_id: itemId, claimer_id: user.id });
-        if (insErr) throw insErr;
-        toast.success('Claimed');
-      }
-
-      onChanged?.();
+      toast.success(mine ? 'Unclaimed' : 'Claimed');
+      onChanged?.(); // realtime should also update, this just makes it snappy
     } catch (e: any) {
-      toast.error('Claim action failed', e?.message ?? String(e));
+      toast.error('Action failed', e?.message ?? String(e));
     } finally {
       setBusy(false);
     }
   };
 
-  return (
-    <Pressable
-      onPress={onPress}
-      disabled={busy || claimedByOther}
-      style={{
-        paddingVertical: 6,
-        paddingHorizontal: 12,
-        borderRadius: 999,
-        backgroundColor: mine ? '#fde8e8' : '#e9f8ec',
-        borderWidth: 1,
-        borderColor: mine ? '#f8c7c7' : '#bce9cb',
-        opacity: busy || claimedByOther ? 0.6 : 1,
-      }}
-    >
-      <Text style={{ fontWeight: '800', fontSize: 12, color: mine ? '#c0392b' : '#1f9e4a' }}>
-        {busy ? (mine ? 'Unclaiming…' : 'Claiming…') : label}
-      </Text>
-    </Pressable>
-  );
+return (
+  <Pressable
+    onPress={press}
+    disabled={disabled || busy}
+    accessibilityRole="button"
+    accessibilityLabel={label}
+    accessibilityState={{ disabled: disabled || busy }}
+    style={{
+      paddingVertical: 6,
+      paddingHorizontal: 12,
+      borderRadius: 999,
+      backgroundColor: bg,
+      borderWidth: 1,
+      borderColor: border,
+      minWidth: 92,
+      alignItems: 'center',
+      justifyContent: 'center',
+    }}
+  >
+    {busy ? (
+      <View style={{ height: 16 }}>
+        <ActivityIndicator size="small" />
+      </View>
+    ) : (
+      <Text style={{ fontWeight: '800', fontSize: 12, color: fg }}>{label}</Text>
+    )}
+  </Pressable>
+);
+
 }
