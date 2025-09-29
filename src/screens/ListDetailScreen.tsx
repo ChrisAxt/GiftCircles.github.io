@@ -1,11 +1,14 @@
 // src/screens/ListDetailScreen.tsx
 import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { View, Text, FlatList, Button, ActivityIndicator, Alert, Pressable, Platform } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
 import ClaimButton from '../components/ClaimButton';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useTranslation } from 'react-i18next';
+import { Screen } from '../components/Screen';
+import TopBar from '../components/TopBar';
 
 type Item = {
   id: string;
@@ -21,10 +24,12 @@ type Claim = { id: string; item_id: string; claimer_id: string; created_at?: str
 
 export default function ListDetailScreen({ route, navigation }: any) {
   const { id } = route.params as { id: string };
+  const { t } = useTranslation();
+  const { colors } = useTheme();
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [listName, setListName] = useState<string>('List');
+  const [listName, setListName] = useState<string>(t('listDetail.title'));
   const [items, setItems] = useState<Item[]>([]);
   const [claimsByItem, setClaimsByItem] = useState<Record<string, Claim[]>>({});
   const [isRecipient, setIsRecipient] = useState(false);
@@ -38,11 +43,23 @@ export default function ListDetailScreen({ route, navigation }: any) {
   const [claimedByName, setClaimedByName] = useState<Record<string, string>>({});
   const itemIdsRef = useRef<Set<string>>(new Set());
   const insets = useSafeAreaInsets();
+  const [initialized, setInitialized] = useState(false);
+  const [refreshing, setRefreshing] = useState(false);
 
-  // Stable loader: depends only on list id
   const load = useCallback(async () => {
-    setLoading(true);
+    const firstLoad = !initialized;
+    const wasRefreshing = !!refreshing;
+
+    if (firstLoad) setLoading(true);
     setErrorMsg(null);
+
+    const stopIndicators = () => {
+      if (firstLoad) setLoading(false);
+      if (wasRefreshing) setRefreshing(false);
+      setInitialized(true);
+    };
+
+    const failsafe = setTimeout(stopIndicators, 8000);
 
     try {
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
@@ -54,7 +71,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
       if (!user) return;
       setMyUserId(user.id);
 
-      // List (for title + owner + event)
+      // List
       const { data: listRow, error: listErr } = await supabase
         .from('lists')
         .select('id,name,created_by,event_id')
@@ -62,29 +79,36 @@ export default function ListDetailScreen({ route, navigation }: any) {
         .maybeSingle();
       if (listErr) throw listErr;
       if (!listRow) {
-        setErrorMsg("This list doesn't exist or you don’t have access.");
+        setErrorMsg(t('listDetail.errors.notFound'));
         setItems([]); setClaimsByItem({}); setIsRecipient(false); setIsOwner(false);
         setClaimedByName({}); setClaimedSummary({ claimed: 0, unclaimed: 0 });
         itemIdsRef.current = new Set();
         return;
       }
-      setListName(listRow.name || 'List');
+      setListName(listRow.name || t('listDetail.title'));
       setIsOwner(listRow.created_by === user.id);
       setListEventId(listRow.event_id);
 
       if (listRow?.event_id) {
-        const { data: mem } = await supabase
-          .from('event_members')
-          .select('role')
-          .eq('event_id', listRow.event_id)
-          .eq('user_id', user.id)
-          .maybeSingle();
-        setIsAdmin(mem?.role === 'admin' || mem?.role === 'owner');
+        const [{ data: mem }, { data: ev }] = await Promise.all([
+          supabase
+            .from('event_members')
+            .select('role')
+            .eq('event_id', listRow.event_id)
+            .eq('user_id', user.id)
+            .maybeSingle(),
+          supabase
+            .from('events')
+            .select('owner_id')
+            .eq('id', listRow.event_id)
+            .maybeSingle(),
+        ]);
+        setIsAdmin(mem?.role === 'admin' || ev?.owner_id === user.id);
       } else {
         setIsAdmin(false);
       }
 
-      // Items (include created_by for delete perms)
+      // Items
       const { data: its, error: itemsErr } = await supabase
         .from('items')
         .select('id,list_id,name,url,price,created_at,created_by')
@@ -96,7 +120,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
       const itemIds = (its ?? []).map(i => i.id);
       itemIdsRef.current = new Set(itemIds);
 
-      // Claims via RPC (visibility-aware)
+      // Claims via RPC
       let claimsMap: Record<string, Claim[]> = {};
       if (itemIds.length) {
         const { data: claimRows, error: claimsErr } = await supabase
@@ -116,7 +140,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
         setClaimsByItem({});
       }
 
-      // Summary (from fresh claimsMap)
+      // Summary
       const totalItems = (its ?? []).length;
       const claimedCount = (its ?? []).reduce((acc, it) => acc + ((claimsMap[it.id]?.length ?? 0) > 0 ? 1 : 0), 0);
       setClaimedSummary({ claimed: claimedCount, unclaimed: Math.max(0, totalItems - claimedCount) });
@@ -130,7 +154,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
         .maybeSingle();
       setIsRecipient(!!r);
 
-      // Names for “Claimed by: Name” (build from fresh claimsMap)
+      // Names for “Claimed by: Name”
       const claimerIds = Array.from(
         new Set(Object.values(claimsMap).flat().map(c => c.claimer_id).filter(Boolean))
       ) as string[];
@@ -148,23 +172,27 @@ export default function ListDetailScreen({ route, navigation }: any) {
         for (const [itemId, cl] of Object.entries(claimsMap)) {
           if (!cl?.length) continue;
           const first = cl[0];
-          byItem[itemId] = nameById[first.claimer_id] || 'Someone';
+          byItem[itemId] = nameById[first.claimer_id] || t('listDetail.item.someone');
         }
         setClaimedByName(byItem);
       } else {
         setClaimedByName({});
       }
     } catch (e: any) {
-      if (e?.name === 'AuthSessionMissingError') return;
+      if (e?.name === 'AuthSessionMissingError') {
+        clearTimeout(failsafe);
+        stopIndicators();
+        return;
+      }
       console.log('[ListDetail] load ERROR', e);
-      setErrorMsg(e?.message ?? 'Something went wrong while loading this list.');
+      setErrorMsg(t('listDetail.errors.load'));
       setIsOwner(false);
     } finally {
-      setLoading(false);
+      clearTimeout(failsafe);
+      stopIndicators();
     }
-  }, [id]);
+  }, [id, t, initialized, refreshing, setInitialized, setLoading, setRefreshing]);
 
-  // perms & delete handlers
   const canDeleteItem = useCallback((item: Item) => {
     if (!myUserId) return false;
     return item.created_by === myUserId || isOwner || isAdmin;
@@ -173,15 +201,17 @@ export default function ListDetailScreen({ route, navigation }: any) {
   const deleteItem = useCallback(async (item: Item) => {
     let confirmed = true;
     if (Platform.OS === 'web') {
-      confirmed = typeof window !== 'undefined' ? window.confirm(`Delete "${item.name}"?`) : true;
+      confirmed = typeof window !== 'undefined'
+        ? window.confirm(`${t('listDetail.confirm.deleteItemTitle')}\n${t('listDetail.confirm.deleteItemBody', { name: item.name })}`)
+        : true;
     } else {
       confirmed = await new Promise<boolean>((resolve) => {
         Alert.alert(
-          'Delete item?',
-          `This will remove "${item.name}" and its claims.`,
+          t('listDetail.confirm.deleteItemTitle'),
+          t('listDetail.confirm.deleteItemBody', { name: item.name }),
           [
             { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-            { text: 'Delete', style: 'destructive', onPress: () => resolve(true) },
+            { text: t('listDetail.actions.delete'), style: 'destructive', onPress: () => resolve(true) },
           ]
         );
       });
@@ -192,26 +222,31 @@ export default function ListDetailScreen({ route, navigation }: any) {
       const { error: rpcErr } = await supabase.rpc('delete_item', { p_item_id: item.id });
       if (rpcErr) {
         const msg = String(rpcErr.message || rpcErr);
-        if (msg.includes('not_authorized')) return toast.error('Not allowed', 'You cannot delete this item.');
-        if (msg.includes('has_claims')) return toast.info('Cannot delete', 'Unclaim first or ask an admin/list owner.');
-        if (msg.includes('not_found')) toast.info('Already gone', 'This item no longer exists.');
-        else toast.error('Delete failed', msg);
+        if (msg.includes('not_authorized')) {
+          toast.error(t('listDetail.errors.notAllowed'), t('listDetail.errors.cannotDeleteBody'));
+        } else if (msg.includes('has_claims')) {
+          toast.info(t('listDetail.errors.hasClaimsTitle'), t('listDetail.errors.hasClaimsBody'));
+        } else if (msg.includes('not_found')) {
+          toast.info(t('listDetail.errors.alreadyGoneTitle'), t('listDetail.errors.alreadyGoneBody'));
+        } else {
+          toast.error(t('listDetail.errors.deleteFailed'), msg);
+        }
 
-        // Fallback to reveal RLS errors
+        // Fallback to expose RLS issues
         const { error: directErr } = await supabase.from('items').delete().eq('id', item.id);
-        if (directErr) toast.error('Direct delete blocked', directErr.message ?? String(directErr));
+        if (directErr) toast.error(t('listDetail.errors.directDeleteBlocked'), directErr.message ?? String(directErr));
         await load();
         return;
       }
 
-      toast.success('Item deleted');
+      toast.success(t('listDetail.actions.delete'));
       await load();
     } catch (e: any) {
-      toast.error('Delete failed', e?.message ?? String(e));
+      toast.error(t('listDetail.errors.deleteFailed'), e?.message ?? String(e));
     }
-  }, [load]);
+  }, [load, t]);
 
-  // realtime — subscribe once per list id
+  // realtime
   useEffect(() => {
     const ch = supabase
       .channel(`list-realtime-${id}`)
@@ -221,7 +256,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'claims' }, () => load())
       .subscribe();
     return () => { supabase.removeChannel(ch); };
-  }, [id]); // IMPORTANT: only [id]
+  }, [id, load]);
 
   // delete list
   const doDelete = useCallback(async () => {
@@ -229,50 +264,50 @@ export default function ListDetailScreen({ route, navigation }: any) {
       const { error } = await supabase.rpc('delete_list', { p_list_id: id });
       if (error) {
         const msg = String(error.message || error);
-        if (msg.includes('not_authorized')) return toast.error('Not allowed', { text2: 'Only the list creator can delete this list.' });
-        if (msg.includes('not_found')) return toast.error('Not found', { text2: 'This list no longer exists.' });
-        if (msg.includes('not_authenticated')) return toast.error('Sign in required', { text2: 'Please sign in and try again.' });
-        return toast.error('Delete failed', { text2: msg });
+        if (msg.includes('not_authorized')) return toast.error(t('listDetail.errors.notAllowed'), { text2: t('listDetail.errors.cannotDeleteBody') });
+        if (msg.includes('not_found')) return toast.error(t('listDetail.errors.notFound'));
+        if (msg.includes('not_authenticated')) return toast.error(t('listDetail.errors.generic'), { text2: 'Please sign in and try again.' });
+        return toast.error(t('listDetail.errors.deleteFailed'), { text2: msg });
       }
-      toast.success('List deleted');
+      toast.success(t('listDetail.actions.delete'));
       navigation.goBack();
     } catch (e: any) {
-      toast.error('Delete failed', { text2: e?.message ?? String(e) });
+      toast.error(t('listDetail.errors.deleteFailed'), { text2: e?.message ?? String(e) });
     }
-  }, [id, navigation]);
+  }, [id, navigation, t]);
 
   const confirmDelete = useCallback(() => {
     if (Platform.OS === 'web') {
       const ok = typeof window !== 'undefined' && typeof window.confirm === 'function'
-        ? window.confirm('Delete this list?\nThis will remove the list and all its items and claims. This cannot be undone.')
+        ? window.confirm(`${t('listDetail.confirm.deleteListTitle')}\n${t('listDetail.confirm.deleteListBody')}`)
         : true;
       if (ok) doDelete();
       return;
     }
     Alert.alert(
-      'Delete this list?',
-      'This will remove the list and all its items and claims. This cannot be undone.',
+      t('listDetail.confirm.deleteListTitle'),
+      t('listDetail.confirm.deleteListBody'),
       [
         { text: 'Cancel', style: 'cancel' },
-        { text: 'Delete', style: 'destructive', onPress: doDelete },
+        { text: t('listDetail.actions.delete'), style: 'destructive', onPress: doDelete },
       ]
     );
-  }, [doDelete]);
+  }, [doDelete, t]);
 
-  // initial/focus load — depend on id
-  useFocusEffect(useCallback(() => { load(); }, [id]));
+  // focus load
+  useFocusEffect(useCallback(() => { load(); }, [load]));
 
   useLayoutEffect(() => {
     navigation.setOptions({
-      title: listName || 'List',
+      title: listName || t('listDetail.title'),
       headerRight: () =>
         isOwner ? (
           <Pressable onPress={confirmDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-            <Text style={{ color: '#d9534f', fontWeight: '700' }}>Delete</Text>
+            <Text style={{ color: '#d9534f', fontWeight: '700' }}>{t('listDetail.actions.delete')}</Text>
           </Pressable>
         ) : null,
     });
-  }, [navigation, listName, isOwner, confirmDelete]);
+  }, [navigation, listName, isOwner, confirmDelete, t]);
 
   // ----------------- UI -----------------
   if (loading) {
@@ -288,107 +323,120 @@ export default function ListDetailScreen({ route, navigation }: any) {
       <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16 }}>
         <Text style={{ fontSize: 16, textAlign: 'center' }}>{errorMsg}</Text>
         <View style={{ height: 12 }} />
-        <Button title="Go back" onPress={() => navigation.goBack()} />
+        <Button title={t('listDetail.errors.goBack')} onPress={() => navigation.goBack()} />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f6f8fa' }}>
-      <View style={{ padding: 16 }}>
-        <Pressable
-          onPress={() => navigation.navigate('AddItem', { listId: id, listName })}
-          style={{
-            backgroundColor: '#2e95f1',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            borderRadius: 10,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Add Item</Text>
-        </Pressable>
-      </View>
-
-
-      {/* Claimed/Unclaimed summary — hidden from recipients */}
-      {!isRecipient && (
-        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-          <Text style={{ fontWeight: '700' }}>
-            Claimed: {claimedSummary.claimed} · Unclaimed: {claimedSummary.unclaimed}
-          </Text>
+    <Screen>
+    <TopBar title={t('listDetail.screenTitle', 'List')} />
+      <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 16 }}>
+        <View style={{ padding: 16 }}>
+          <Pressable
+            onPress={() => navigation.navigate('AddItem', { listId: id, listName })}
+            style={{
+              marginTop: -15,
+              backgroundColor: '#2e95f1', // brand blue
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>{t('listDetail.actions.addItem')}</Text>
+          </Pressable>
         </View>
-      )}
 
-      <FlatList
-        data={items}
-        keyExtractor={(i) => String(i.id)}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}
-        renderItem={({ item }) => {
-          const claims = claimsByItem[item.id] ?? [];
+        {/* Claimed/Unclaimed summary — hidden from recipients */}
+        {!isRecipient && (
+          <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+            <Text style={{ fontWeight: '700', color: colors.text }}>
+              {t('listDetail.summary.label', { claimed: claimedSummary.claimed, unclaimed: claimedSummary.unclaimed })}
+            </Text>
+          </View>
+        )}
 
-          return (
-            <View style={{
-              marginHorizontal: 12,
-              marginVertical: 6,
-              backgroundColor: 'white',
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: 1, borderColor: '#eef2f7',
-              shadowColor: '#000', shadowOpacity: 0.04, shadowRadius: 6, shadowOffset: { width: 0, height: 2 },
-            }}>
-              {/* Header: name + delete */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                <Text style={{ fontSize: 16, fontWeight: '600', flex: 1, paddingRight: 8 }}>
-                  {item.name}
-                </Text>
+        <FlatList
+          data={items}
+          keyExtractor={(i) => String(i.id)}
+          contentContainerStyle={{ paddingBottom: insets.bottom + 24 }}
+          renderItem={({ item }) => {
+            const claims = claimsByItem[item.id] ?? [];
 
-                {canDeleteItem(item) && (
-                  <Pressable
-                    onPress={() => deleteItem(item)}
-                    style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#fdecef' }}
-                  >
-                    <Text style={{ color: '#c0392b', fontWeight: '700' }}>Delete</Text>
-                  </Pressable>
-                )}
-              </View>
-
-              {/* URL / Price */}
-              {item.url ? <Text selectable style={{ color: '#2e95f1', marginTop: 2 }}>{item.url}</Text> : null}
-              {typeof item.price === 'number' ? <Text style={{ marginTop: 2 }}>${Number(item.price).toFixed(2)}</Text> : null}
-
-              {/* Claim info & button (recipients can’t see claimers) */}
-              {!isRecipient ? (
-                <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
-                  <Text style={{ opacity: 0.7 }}>
-                    {(() => {
-                      const mine = myUserId ? claims.some(c => c.claimer_id === myUserId) : false;
-                      if (!claims.length) return 'Not claimed yet';
-                      return mine ? 'Claimed by: You' : `Claimed by: ${claimedByName[item.id] ?? 'Someone'}`;
-                    })()}
+            return (
+              <View
+                style={{
+                  marginHorizontal: 12,
+                  marginVertical: 6,
+                  backgroundColor: colors.card,             // theme surface
+                  borderRadius: 12,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,               // theme border
+                  shadowColor: '#000',
+                  shadowOpacity: 0.04,
+                  shadowRadius: 6,
+                  shadowOffset: { width: 0, height: 2 },
+                }}
+              >
+                {/* Header: name + delete */}
+                <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                  <Text style={{ fontSize: 16, fontWeight: '600', flex: 1, paddingRight: 8, color: colors.text }}>
+                    {item.name}
                   </Text>
 
-                  <ClaimButton
-                    itemId={item.id}
-                    claims={claimsByItem[item.id] ?? []}
-                    meId={myUserId}
-                    onChanged={load}
-                  />
+                  {canDeleteItem(item) && (
+                    <Pressable
+                      onPress={() => deleteItem(item)}
+                      style={{ paddingVertical: 6, paddingHorizontal: 10, borderRadius: 999, backgroundColor: '#fdecef' }}
+                    >
+                      <Text style={{ color: '#c0392b', fontWeight: '700' }}>{t('listDetail.actions.delete')}</Text>
+                    </Pressable>
+                  )}
                 </View>
-              ) : (
-                <Text style={{ marginTop: 8, fontStyle: 'italic' }}>
-                  Who’s buying remains hidden from recipients.
-                </Text>
-              )}
+
+                {/* URL / Price */}
+                {item.url ? <Text selectable style={{ color: '#2e95f1', marginTop: 2 }}>{item.url}</Text> : null}
+                {typeof item.price === 'number' ? (
+                  <Text style={{ marginTop: 2, color: colors.text }}>${Number(item.price).toFixed(2)}</Text>
+                ) : null}
+
+                {/* Claim info & button (recipients can’t see claimers) */}
+                {!isRecipient ? (
+                  <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
+                    <Text style={{ opacity: 0.7, color: colors.text }}>
+                      {(() => {
+                        const mine = myUserId ? claims.some(c => c.claimer_id === myUserId) : false;
+                        if (!claims.length) return t('listDetail.item.notClaimed');
+                        return mine
+                          ? t('listDetail.item.claimedByYou')
+                          : t('listDetail.item.claimedByName', { name: claimedByName[item.id] ?? t('listDetail.item.someone') });
+                      })()}
+                    </Text>
+
+                    <ClaimButton
+                      itemId={item.id}
+                      claims={claimsByItem[item.id] ?? []}
+                      meId={myUserId}
+                      onChanged={load}
+                    />
+                  </View>
+                ) : (
+                  <Text style={{ marginTop: 8, fontStyle: 'italic', color: colors.text }}>
+                    {t('listDetail.item.hiddenForRecipients')}
+                  </Text>
+                )}
+              </View>
+            );
+          }}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', padding: 24 }}>
+              <Text style={{ opacity: 0.6, color: colors.text }}>{t('listDetail.empty')}</Text>
             </View>
-          );
-        }}
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', padding: 24 }}>
-            <Text style={{ opacity: 0.6 }}>No items yet.</Text>
-          </View>
-        }
-      />
-    </View>
+          }
+        />
+      </View>
+    </Screen>
   );
 }

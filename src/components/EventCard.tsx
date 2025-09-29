@@ -1,6 +1,9 @@
 // src/components/EventCard.tsx
 import React from 'react';
 import { View, Text, Pressable } from 'react-native';
+import { useTranslation } from 'react-i18next';
+import { useTheme } from '@react-navigation/native';
+import { formatDateLocalized } from '../utils/date';
 
 // Pretty “Mon, Jan 1, 2026”
 function formatDate(iso?: string) {
@@ -22,29 +25,54 @@ function daysDiffUTC(aISO: string, bISO: string) {
   return Math.round((a.getTime() - b.getTime()) / MS);
 }
 
-function humanizeDaysLeft(daysLeft: number) {
-  if (daysLeft === 0) return 'Today';
-  if (daysLeft === 1) return 'Tomorrow';
-  if (daysLeft === -1) return 'Yesterday';
-  if (daysLeft > 1) return `in ${daysLeft} days`;
-  return `${Math.abs(daysLeft)} days ago`;
+function humanizeDaysLeft(t: (k: string, o?: any) => string, daysLeft: number) {
+  if (daysLeft === 0)  return t('eventList.eventCard.today');
+  if (daysLeft === 1)  return t('eventList.eventCard.tomorrow');
+  if (daysLeft > 1)    return t('eventList.eventCard.inDays',  { count: daysLeft });
+  // daysLeft < 0
+  return t('eventList.eventCard.daysAgo', { count: Math.abs(daysLeft) });
 }
 
 // Small pill
 function Pill({ text, tone }: { text: string; tone: 'gray' | 'green' | 'red' }) {
-  const bg = tone === 'green' ? '#e9f8ec' : tone === 'red' ? '#fde8e8' : '#edf1f5';
-  const fg = tone === 'green' ? '#1f9e4a' : tone === 'red' ? '#c0392b' : '#63707e';
+  const { colors } = useTheme();
+  let bg = colors.card;
+  let fg = colors.text;
+  let borderW = 1;
+  let borderC = colors.border;
+
+  if (tone === 'green') {
+    bg = '#e9f8ec'; fg = '#1f9e4a'; borderW = 0; borderC = 'transparent';
+  } else if (tone === 'red') {
+    bg = '#fde8e8'; fg = '#c0392b'; borderW = 0; borderC = 'transparent';
+  }
+
   return (
-    <View style={{ backgroundColor: bg, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 999 }}>
-      <Text style={{ color: fg, fontSize: 12, fontWeight: '700' }}>{text}</Text>
+    <View style={{
+      backgroundColor: bg,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 999,
+      borderWidth: borderW,
+      borderColor: borderC,
+    }}>
+      <Text style={{ color: fg, fontSize: 12, fontWeight: '700', opacity: tone === 'gray' ? 0.85 : 1 }}>
+        {text}
+      </Text>
     </View>
   );
 }
 
-// Simple colored initial bubble from user id
+// Accepts either "A:userid" token or just a raw id
 function Avatar({ id }: { id: string }) {
-  const initial = id.slice(0, 1).toUpperCase();
-  let hash = 0; for (let i = 0; i < id.length; i++) hash = (hash * 31 + id.charCodeAt(i)) | 0;
+  let initial = id.slice(0, 1).toUpperCase();
+  let colorId = id;
+  if (id.includes(':')) {
+    const [ch, rest] = id.split(':');
+    if (ch) initial = ch.toUpperCase();
+    if (rest) colorId = rest;
+  }
+  let hash = 0; for (let i = 0; i < colorId.length; i++) hash = (hash * 31 + colorId.charCodeAt(i)) | 0;
   const hue = Math.abs(hash) % 360;
   const bg = `hsl(${hue} 70% 45%)`;
   return (
@@ -73,24 +101,27 @@ export default function EventCard({
   total: number;
   onPress: () => void;
 }) {
+  const { t, i18n } = useTranslation();
+  const { colors } = useTheme();
+
   const todayISO = new Date().toISOString();
   const hasDate = !!date;
   const daysLeft = hasDate ? daysDiffUTC(date as string, todayISO) : 0;
 
-  // Status pill logic (no bar)
+  // Status pill text & tone
   let tone: 'gray' | 'green' | 'red' = 'gray';
-  let label = 'No date';
+  let label = t('eventList.eventCard.noDate');
   if (hasDate) {
-    if (daysLeft > 0) { tone = 'gray'; label = humanizeDaysLeft(daysLeft); }
-    else if (daysLeft === 0) { tone = 'green'; label = 'Today'; }
-    else { tone = 'red'; label = humanizeDaysLeft(daysLeft); }
+    if (daysLeft > 0)       { tone = 'gray';  label = humanizeDaysLeft(t, daysLeft); }
+    else if (daysLeft === 0){ tone = 'green'; label = humanizeDaysLeft(t, daysLeft); }
+    else                    { tone = 'red';   label = humanizeDaysLeft(t, daysLeft); }
   }
 
   return (
     <Pressable
       onPress={onPress}
       style={{
-        backgroundColor: 'white',
+        backgroundColor: colors.card,
         padding: 14,
         borderRadius: 14,
         marginBottom: 12,
@@ -99,19 +130,25 @@ export default function EventCard({
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 2 },
         elevation: 2,
+        borderWidth: 1,
+        borderColor: colors.border,
       }}
     >
       {/* Top row: title + status */}
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 16, fontWeight: '700', flexShrink: 1 }}>{title}</Text>
+        <Text style={{ fontSize: 16, fontWeight: '700', flexShrink: 1, color: colors.text }}>{title}</Text>
         <Pill text={label} tone={tone} />
       </View>
 
       {/* Date line */}
       {hasDate ? (
-        <Text style={{ marginTop: 2, opacity: 0.7 }}>{formatDate(date)}</Text>
+        <Text style={{ marginTop: 2, color: colors.text, opacity: 0.7 }}>
+          {formatDateLocalized(date, i18n.language)}
+        </Text>
       ) : (
-        <Text style={{ marginTop: 2, opacity: 0.5 }}>No date set</Text>
+        <Text style={{ marginTop: 2, color: colors.text, opacity: 0.5 }}>
+          {t('eventList.eventCard.noDate')}
+        </Text>
       )}
 
       {/* Bottom row: avatars + members + claimed/total */}
@@ -130,20 +167,26 @@ export default function EventCard({
                   paddingHorizontal: 8,
                   height: 24,
                   borderRadius: 12,
-                  backgroundColor: '#eef2f7',
+                  backgroundColor: colors.card,
+                  borderWidth: 1,
+                  borderColor: colors.border,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
               >
-                <Text style={{ fontWeight: '700', fontSize: 12 }}>+{memberCount - 4}</Text>
+                <Text style={{ fontWeight: '700', fontSize: 12, color: colors.text }}>
+                  +{memberCount - 4}
+                </Text>
               </View>
             )}
           </View>
-          <Text style={{ marginLeft: 8, opacity: 0.7 }}>{memberCount} members</Text>
+          <Text style={{ marginLeft: 8, color: colors.text, opacity: 0.7 }}>
+            {t('eventList.eventCard.members', { count: memberCount })}
+          </Text>
         </View>
 
-        <Text style={{ fontWeight: '600', color: '#63707e' }}>
-          {claimed}/{total} claimed
+        <Text style={{ fontWeight: '600', color: colors.text, opacity: 0.8 }}>
+          {t('eventList.eventCard.claimedShort', { claimed, total })}
         </Text>
       </View>
     </Pressable>

@@ -3,10 +3,14 @@ import { useState } from 'react';
 import { View, Alert, Pressable, ActivityIndicator, Text } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
-import { LabeledInput, LabeledPressableField } from '../components/LabeledInput';
+import { LabeledInput } from '../components/LabeledInput';
+import { useTranslation } from 'react-i18next';
+import { ScreenScroll } from '../components/Screen';
+import TopBar from '../components/TopBar';
 
 export default function AddItemScreen({ route, navigation }: any) {
   const { listId } = route.params as { listId: string };
+  const { t } = useTranslation();
 
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
@@ -26,7 +30,7 @@ export default function AddItemScreen({ route, navigation }: any) {
   const add = async () => {
     if (submitting) return;
     if (!name.trim()) {
-      toast.info('Item name required', 'Please enter a name.');
+      toast.info(t('addItem.toasts.itemNameRequired.title'), t('addItem.toasts.itemNameRequired.body'));
       return;
     }
 
@@ -34,102 +38,105 @@ export default function AddItemScreen({ route, navigation }: any) {
     try {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
-      if (!user) throw new Error('Not signed in');
+      if (!user) throw new Error(t('addItem.toasts.notSignedIn'));
 
       const parsedPrice = parsePrice(price);
       if (price.trim() && parsedPrice === null) {
-        toast.info('Invalid price', 'Enter a number like 19.99');
+        toast.info(t('addItem.toasts.invalidPrice.title'), t('addItem.toasts.invalidPrice.body'));
         setSubmitting(false);
         return;
       }
 
-      // Build payload, only include fields your schema supports
       const payload: any = {
         list_id: listId,
         name: name.trim(),
         url: url.trim() ? url.trim() : null,
         price: parsedPrice,
-        created_by: user.id, // helps with delete permissions
+        created_by: user.id,
       };
-      if (notes.trim()) payload.notes = notes.trim(); // include only if you have items.notes
+      if (notes.trim()) payload.notes = notes.trim();
 
-      console.log('[AddItem] inserting', payload);
-      const { data, error } = await supabase
+      const { error } = await supabase
         .from('items')
         .insert(payload)
-        .select('id')     // force returning row
+        .select('id')
         .single();
 
       if (error) throw error;
 
-      toast.success('Item added');
+      toast.success(t('addItem.toasts.added'));
       navigation.goBack();
     } catch (e: any) {
-      console.log('[AddItem] ERROR', e);
       const msg = e?.message ?? String(e);
-      toast.error('Add failed', msg);
-      Alert.alert('Error', msg);
+      toast.error(t('addItem.toasts.addFailed.title'), msg);
+      Alert.alert(t('addItem.errors.generic'), msg);
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <View style={{ padding: 16 }}>
-      <LabeledInput
-        label="Item name"
-        placeholder="e.g. Noise-canceling headphones"
-        value={name}
-        onChangeText={setName}
-      />
+    <ScreenScroll >
+    <TopBar title={t('addItem.screenTitle', 'Add Item')} />
+      <View style={{ paddingTop: 16, paddingHorizontal: 16 }}>
+        <LabeledInput
+          label={t('addItem.labels.name')}
+          placeholder={t('addItem.placeholders.name')}
+          value={name}
+          onChangeText={setName}
+        />
 
-      <LabeledInput
-        label="URL (optional)"
-        placeholder="e.g. https://example.com/product"
-        value={url}
-        onChangeText={setUrl}
-        keyboardType="url"
-        autoCapitalize="none"
-      />
+        <LabeledInput
+          label={t('addItem.labels.urlOpt')}
+          placeholder={t('addItem.placeholders.url')}
+          value={url}
+          onChangeText={setUrl}
+          keyboardType="url"
+          autoCapitalize="none"
+        />
 
-      <LabeledInput
-        label="Price (optional)"
-        placeholder="e.g. 149.99"
-        value={price}
-        onChangeText={setPrice}
-        keyboardType="decimal-pad"
-      />
+        <LabeledInput
+          label={t('addItem.labels.priceOpt')}
+          placeholder={t('addItem.placeholders.price')}
+          value={price}
+          onChangeText={setPrice}
+          keyboardType="decimal-pad"
+        />
 
-      <LabeledInput
-        label="Notes (optional)"
-        placeholder="e.g. Prefers over-ear style"
-        value={notes}
-        onChangeText={setNotes}
-        multiline
-      />
-      <View >
-        <Pressable
-          onPress={add}
-          disabled={submitting}
-          style={{
-            backgroundColor: '#2e95f1',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            borderRadius: 10,
-            alignItems: 'center',
-            opacity: submitting ? 0.7 : 1,
-          }}
-        >
-          {submitting ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              <ActivityIndicator color="#fff" />
-              <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>Adding…</Text>
-            </View>
-          ) : (
-            <Text style={{ color: '#fff', fontWeight: '700' }}>Add</Text>
-          )}
-        </Pressable>
+        <LabeledInput
+          label={t('addItem.labels.notesOpt')}
+          placeholder={t('addItem.placeholders.notes')}
+          value={notes}
+          onChangeText={setNotes}
+          multiline
+        />
+
+        <View>
+          <Pressable
+            onPress={add}
+            disabled={submitting}
+            style={{
+              backgroundColor: '#2e95f1', // keep your brand color
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              opacity: submitting ? 0.7 : 1,
+            }}
+          >
+            {submitting ? (
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <ActivityIndicator color="#fff" />
+                <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>
+                  {t('addItem.states.adding')}
+                </Text>
+              </View>
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{t('addItem.actions.add')}</Text>
+            )}
+          </Pressable>
+        </View>
       </View>
-    </View>
+    </ScreenScroll>
   );
 }

@@ -1,15 +1,15 @@
-// src/screens/MyClaimsScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator, Alert, RefreshControl } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
+import { useTranslation } from 'react-i18next';
+import { Screen } from '../components/Screen';
 
 type ClaimRow = {
   id: string;
   item_id: string;
   purchased?: boolean | null;
   created_at?: string;
-  // nested (via select)
   item?: {
     id: string;
     name: string | null;
@@ -37,19 +37,40 @@ type ClaimCard = {
 };
 
 export default function MyClaimsScreen({ navigation }: any) {
+  const { t } = useTranslation();
+  const { colors } = useTheme();
+
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [claims, setClaims] = useState<ClaimRow[]>([]);
   const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [initialized, setInitialized] = useState(false);
 
   const load = useCallback(async () => {
-    setLoading(true);
+    const firstLoad = !initialized;
+    const wasRefreshing = !!refreshing;
+
+    if (firstLoad) setLoading(true);
+
+    const stopIndicators = () => {
+      if (firstLoad) setLoading(false);
+      if (wasRefreshing) setRefreshing(false);
+      setInitialized(true);
+    };
+
+    const failsafe = setTimeout(stopIndicators, 8000);
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { setClaims([]); return; }
+      if (!user) {
+        setClaims([]);
+        clearTimeout(failsafe);
+        stopIndicators();
+        return;
+      }
+
       setMyUserId(user.id);
 
-      // Pull everything we need in one go (claims → items → lists → events)
       const { data: cs, error: cErr } = await supabase
         .from('claims')
         .select(`
@@ -70,10 +91,10 @@ export default function MyClaimsScreen({ navigation }: any) {
     } catch (e) {
       console.log('[MyClaims] load error', e);
     } finally {
-      setLoading(false);
-      setRefreshing(false);
+      clearTimeout(failsafe);
+      stopIndicators();
     }
-  }, []);
+  }, [initialized, refreshing]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -95,15 +116,14 @@ export default function MyClaimsScreen({ navigation }: any) {
         claimId: c.id,
         itemId: c.item_id,
         purchased: !!c.purchased,
-        itemName: (it?.name ?? 'Item'),
-        listName: (ls?.name ?? 'List'),
-        eventTitle: (ev?.title ?? 'Event'),
+        itemName: (it?.name ?? t('myClaims.fallbackItem')),
+        listName: (ls?.name ?? t('myClaims.fallbackList')),
+        eventTitle: (ev?.title ?? t('myClaims.fallbackEvent')),
       };
     });
-  }, [claims]);
+  }, [claims, t]);
 
   const togglePurchased = async (claimId: string, current: boolean) => {
-    // optimistic update
     setClaims(prev =>
       prev.map(c => (c.id === claimId ? { ...c, purchased: !current } : c))
     );
@@ -114,77 +134,87 @@ export default function MyClaimsScreen({ navigation }: any) {
         .eq('id', claimId)
         .eq('claimer_id', myUserId || '');
       if (error) throw error;
-      // server will fan out realtime; load() keeps us consistent
     } catch (e: any) {
-      // revert on error
       setClaims(prev =>
         prev.map(c => (c.id === claimId ? { ...c, purchased: current } : c))
       );
-      Alert.alert('Update failed', e?.message ?? String(e));
+      Alert.alert(t('myClaims.updateFailed'), e?.message ?? String(e));
     }
   };
 
   if (loading && !refreshing) {
-    return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}><ActivityIndicator /></View>;
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
+        <ActivityIndicator />
+      </View>
+    );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f6f8fa', marginTop: 40 }}>
-      <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
-        <Text style={{ fontSize: 16, fontWeight: '700' }}>My claimed items</Text>
-      </View>
-      <FlatList
-        data={rows}
-        keyExtractor={(r) => r.claimId}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={() => { setRefreshing(true); load(); }} />}
-        contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
-        renderItem={({ item }) => (
-          <View
-            style={{
-              backgroundColor: 'white',
-              padding: 14,
-              borderRadius: 14,
-              marginBottom: 12,
-              borderWidth: 1,
-              borderColor: '#eef2f7',
-              shadowColor: '#000',
-              shadowOpacity: 0.04,
-              shadowRadius: 6,
-              shadowOffset: { width: 0, height: 2 },
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-              <View style={{ flex: 1, paddingRight: 8 }}>
-                <Text style={{ fontSize: 16, fontWeight: '700' }}>{item.itemName}</Text>
-                <Text style={{ marginTop: 4, opacity: 0.75 }}>
-                  {item.eventTitle} · {item.listName}
-                </Text>
+    <Screen withTopSafeArea>
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        <View style={{ paddingHorizontal: 16, paddingVertical: 12 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('myClaims.title')}</Text>
+        </View>
+
+        <FlatList
+          data={rows}
+          keyExtractor={(r) => r.claimId}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => { setRefreshing(true); load(); }}
+            />
+          }
+          contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 100 }}
+          renderItem={({ item }) => (
+            <View
+              style={{
+                backgroundColor: colors.card,
+                padding: 14,
+                borderRadius: 14,
+                marginBottom: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                shadowColor: '#000',
+                shadowOpacity: 0.04,
+                shadowRadius: 6,
+                shadowOffset: { width: 0, height: 2 },
+              }}
+            >
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{item.itemName}</Text>
+                  <Text style={{ marginTop: 4, opacity: 0.75, color: colors.text }}>
+                    {t('myClaims.line', { event: item.eventTitle, list: item.listName })}
+                  </Text>
+                </View>
+                <Pressable
+                  onPress={() => togglePurchased(item.claimId, item.purchased)}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 999,
+                    backgroundColor: item.purchased ? '#fde8e8' : '#e9f8ec',
+                    borderWidth: 1,
+                    borderColor: item.purchased ? '#f8c7c7' : '#bce9cb',
+                    alignSelf: 'flex-start',
+                  }}
+                >
+                  <Text style={{ fontWeight: '800', fontSize: 12, color: item.purchased ? '#c0392b' : '#1f9e4a' }}>
+                    {item.purchased ? t('myClaims.markNotPurchased') : t('myClaims.markPurchased')}
+                  </Text>
+                </Pressable>
               </View>
-              <Pressable
-                onPress={() => togglePurchased(item.claimId, item.purchased)}
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  backgroundColor: item.purchased ? '#fde8e8' : '#e9f8ec',
-                  borderWidth: 1,
-                  borderColor: item.purchased ? '#f8c7c7' : '#bce9cb',
-                  alignSelf: 'flex-start',
-                }}
-              >
-                <Text style={{ fontWeight: '800', fontSize: 12, color: item.purchased ? '#c0392b' : '#1f9e4a' }}>
-                  {item.purchased ? 'Mark not purchased' : 'Mark purchased'}
-                </Text>
-              </Pressable>
             </View>
-          </View>
-        )}
-        ListEmptyComponent={
-          <View style={{ alignItems: 'center', marginTop: 48 }}>
-            <Text style={{ opacity: 0.6 }}>You haven’t claimed anything yet.</Text>
-          </View>
-        }
-      />
-    </View>
+          )}
+          ListEmptyComponent={
+            <View style={{ alignItems: 'center', marginTop: 48 }}>
+              <Text style={{ opacity: 0.6, color: colors.text }}>{t('myClaims.empty')}</Text>
+            </View>
+          }
+        />
+      </View>
+    </Screen>
   );
 }

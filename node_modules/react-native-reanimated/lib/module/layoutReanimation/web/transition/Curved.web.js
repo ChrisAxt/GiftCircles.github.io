@@ -59,6 +59,7 @@ function prepareDummy(element, animationConfig, transitionData, dummyTransitionK
     reversed: false
   };
   const dummy = element.cloneNode(true);
+  dummy.reanimatedDummy = true;
   resetStyle(dummy);
   return {
     dummy,

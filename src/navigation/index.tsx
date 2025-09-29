@@ -1,12 +1,21 @@
 // src/navigation/index.tsx
 import React, { useEffect, useState } from 'react';
-import { NavigationContainer } from '@react-navigation/native';
+import { ActivityIndicator, View, Platform, StatusBar as RNStatusBar } from 'react-native';
+import { NavigationContainer, DefaultTheme, DarkTheme, Theme  } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
-import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { ActivityIndicator, View } from 'react-native';
+import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { Session } from '@supabase/supabase-js';
+import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
+import Constants from 'expo-constants';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
+// import { StatusBar } from 'expo-status-bar';
+
+// Settings (wrap + hook for theme/lang)
+import { SettingsProvider, useSettings } from '../theme/SettingsProvider';
+
+// Screens
 import AuthScreen from '../screens/AuthScreen';
 import EventListScreen from '../screens/EventListScreen';
 import EventDetailScreen from '../screens/EventDetailScreen';
@@ -17,40 +26,67 @@ import AddItemScreen from '../screens/AddItemScreen';
 import CreateListScreen from '../screens/CreateListScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditEventScreen from '../screens/EditEventScreen';
-import FancyTabBar from '../components/FancyTabBar';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import AllListsScreen from '../screens/AllListsScreen';
 import MyClaimsScreen from '../screens/MyClaimsScreen';
+import FancyTabBar from '../components/FancyTabBar';
 
 const Stack = createNativeStackNavigator();
-const Tab = createBottomTabNavigator();
-
+const Tab = createMaterialTopTabNavigator();
+const CustomDarkTheme: Theme = {
+  ...DarkTheme,
+  colors: {
+    ...DarkTheme.colors,
+    primary: '#2e95f1',   // keep your brand blue
+    background: '#161a1e',// app background (dark, not black)
+    card: '#1e242a',      // surfaces/cards/tabbar/header
+    text: '#e8eef5',      // primary text
+    border: '#2a3138',    // dividers/borders
+    notification: DarkTheme.colors.notification,
+  },
+};
+/** Tabs with full-screen swipe (tab bar pinned to bottom) */
 function Tabs() {
+  const { t } = useTranslation();
   return (
     <Tab.Navigator
       screenOptions={{
         headerShown: false,
-        tabBarHideOnKeyboard: true, // ← NEW
+        tabBarHideOnKeyboard: false,
+        tabBarPosition: 'bottom',
       }}
       tabBar={(p) => <FancyTabBar {...p} />}
     >
-      <Tab.Screen name="Events" component={EventListScreen} />
-      <Tab.Screen name="Lists" component={AllListsScreen} />
-      <Tab.Screen name="Claimed" component={MyClaimsScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name="Events" component={EventListScreen} options={{ title: t('navigation.tabs.events') }} />
+      <Tab.Screen name="Lists" component={AllListsScreen} options={{ title: t('navigation.tabs.lists') }} />
+      <Tab.Screen name="Claimed" component={MyClaimsScreen} options={{ title: t('navigation.tabs.claimed') }} />
+      <Tab.Screen name="Profile" component={ProfileScreen} options={{ title: t('navigation.tabs.profile') }} />
     </Tab.Navigator>
   );
 }
 
-export default function RootNavigator() {
+/** Inner navigator that *uses* Settings and provides themed NavigationContainer */
+function InnerNavigator() {
+  const { colorScheme } = useSettings();
+  const theme = colorScheme === 'dark' ? CustomDarkTheme : DefaultTheme;
+  const inExpoGo = Constants.appOwnership === 'expo';
+  const isAndroid = Platform.OS === 'android';
+
+  // Ensure system status-bar matches theme even before stack mounts
+  useEffect(() => {
+    RNStatusBar.setBarStyle(colorScheme === 'dark' ? 'light-content' : 'dark-content');
+    if (Platform.OS === 'android') {
+      RNStatusBar.setBackgroundColor('transparent');
+      RNStatusBar.setTranslucent(true);
+    }
+  }, [colorScheme]);
+
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
 
-  // NEW: onboarding flag
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
 
-  // Load session once
   useEffect(() => {
     let mounted = true;
 
@@ -64,10 +100,12 @@ export default function RootNavigator() {
       setSession(newSession);
     });
 
-    return () => { mounted = false; sub.subscription.unsubscribe(); };
+    return () => {
+      mounted = false;
+      sub.subscription.unsubscribe();
+    };
   }, []);
 
-  // When signed in, check profile.onboarding_done
   useEffect(() => {
     let cancelled = false;
     async function check() {
@@ -83,7 +121,6 @@ export default function RootNavigator() {
           .eq('id', user.id)
           .maybeSingle();
 
-        // If profile row missing, treat as needs onboarding
         const done = !!prof?.onboarding_done;
         if (!cancelled) setNeedsOnboarding(!done);
       } finally {
@@ -94,48 +131,60 @@ export default function RootNavigator() {
     return () => { cancelled = true; };
   }, [session]);
 
-  // Loading gate
   if (loadingSession || (session && checkingProfile)) {
     return (
-      <NavigationContainer>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <NavigationContainer theme={theme}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.colors.background }}>
           <ActivityIndicator />
         </View>
       </NavigationContainer>
     );
   }
 
-  // Choose initial route
-  const initialRoute = !session ? 'Auth' : (needsOnboarding ? 'Onboarding' : 'Tabs');
+  const initialRoute = !session ? 'Auth' : (needsOnboarding ? 'Onboarding' : 'Home');
 
   return (
-    <NavigationContainer>
-      <Stack.Navigator initialRouteName={initialRoute} key={initialRoute /* force remount when it changes */}>
+    <NavigationContainer theme={theme}>
+      <Stack.Navigator
+          initialRouteName={initialRoute}
+          key={initialRoute}
+          screenOptions={{
+            statusBarTranslucent: false,
+            statusBarColor: theme.colors.card,
+            statusBarStyle: colorScheme === 'dark' ? 'light' : 'dark',
+            headerTopInsetEnabled: true,
+            headerStyle: { backgroundColor: theme.colors.card },
+            contentStyle: { backgroundColor: theme.colors.background },
+          }}
+        >
         {!session ? (
           <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
         ) : (
           <>
-            {/* NEW: Onboarding as the first screen for brand-new users */}
-            <Stack.Screen
-              name="Onboarding"
-              component={OnboardingScreen}
-              options={{ headerShown: false }}
-            />
+            <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
+            <Stack.Screen name="Home" component={Tabs} options={{ headerShown: false }} />
 
-            {/* App tabs and detail screens */}
-            <Stack.Screen name="Tabs" component={Tabs} options={{ headerShown: false }} />
-
-            <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event' }} />
-            <Stack.Screen name="CreateEvent" component={CreateEventScreen} options={{ title: 'Create Event' }} />
-            <Stack.Screen name="JoinEvent" component={JoinEventScreen} options={{ title: 'Join Event' }} />
-            <Stack.Screen name="EditEvent" component={EditEventScreen} options={{ title: 'Edit Event' }} />
-            <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ title: 'List' }} />
-            <Stack.Screen name="AddItem" component={AddItemScreen} options={{ title: 'Add Item' }} />
-            <Stack.Screen name="CreateList" component={CreateListScreen} options={{ title: 'Create List' }} />
-
+            <Stack.Screen name="EventDetail" component={EventDetailScreen} options={{ title: 'Event', headerShown: false}} />
+            <Stack.Screen name="CreateEvent" component={CreateEventScreen} options={{ title: 'Create Event', headerShown: false }} />
+            <Stack.Screen name="JoinEvent" component={JoinEventScreen} options={{ title: 'Join Event', headerShown: false }} />
+            <Stack.Screen name="EditEvent" component={EditEventScreen} options={{ title: 'Edit Event', headerShown: false  }} />
+            <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ title: 'List', headerShown: false }} />
+            <Stack.Screen name="AddItem" component={AddItemScreen} options={{ title: 'Add Item', headerShown: false }} />
+            <Stack.Screen name="CreateList" component={CreateListScreen} options={{ title: 'Create List', headerShown: false }} />
           </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
+  );
+}
+
+/** Export a root that WRAPS everything in SettingsProvider */
+export default function RootNavigator() {
+  return (
+    <SafeAreaProvider>
+      <SettingsProvider>
+        <InnerNavigator />
+      </SettingsProvider>
+    </SafeAreaProvider>
   );
 }

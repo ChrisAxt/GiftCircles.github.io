@@ -3,6 +3,7 @@ import React, { useMemo, useRef, useState } from 'react';
 import { View, Text, Pressable, ScrollView, Dimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const { width } = Dimensions.get('window');
 
@@ -357,6 +358,7 @@ type Slide =
 export default function OnboardingScreen({ navigation }: any) {
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
+  const insets = useSafeAreaInsets();
 
   const finish = async (navigateTo?: { name: string; params?: any }) => {
     try {
@@ -429,7 +431,7 @@ export default function OnboardingScreen({ navigation }: any) {
   const skipOrFinishLabel = useMemo(() => (canNext ? 'Skip' : 'Finish'), [canNext]);
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#0ea5e9' }}>
+    <SafeAreaView style={{ flex: 1, backgroundColor: '#0ea5e9' }} edges={['top', 'left', 'right']}>
       {/* Header */}
       <View style={{ paddingTop: 64, paddingHorizontal: 20 }}>
         <Text style={{ color: 'white', fontSize: 28, fontWeight: '800' }}>
@@ -506,6 +508,6 @@ export default function OnboardingScreen({ navigation }: any) {
           </Pressable>
         )}
       </View>
-    </View>
+    </SafeAreaView>
   );
 }

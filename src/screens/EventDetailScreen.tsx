@@ -1,19 +1,24 @@
 // src/screens/EventDetailScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState, useLayoutEffect } from 'react';
 import {
-  View, Text, FlatList, Button, Pressable, Alert, ActivityIndicator, Share, Animated, Easing,
+  View, Text, FlatList, Pressable, Alert, ActivityIndicator, Share, Animated, Easing,
   ImageBackground, StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform,
   TouchableWithoutFeedback, Keyboard,
 } from 'react-native';
-import { useFocusEffect } from '@react-navigation/native';
+import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { Event } from '../types';
 import ListCard from '../components/ListCard';
 import { pickEventImage } from '../theme/eventImages';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { fetchClaimCountsByList } from '../lib/claimCounts';
 import { sendInviteEmail } from '../lib/email';
 import { useSession } from '../hooks/useSession';
+import { useTranslation } from 'react-i18next';
+import { formatDateLocalized } from '../utils/date';
+import { Screen } from '../components/Screen';
+import { useHeaderHeight } from '@react-navigation/elements';
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import TopBar from '../components/TopBar';
 
 type MemberRow = { event_id: string; user_id: string; role: 'giver' | 'recipient' | 'admin' };
 type ListRow = { id: string; event_id: string; name: string };
@@ -30,7 +35,11 @@ function getEventTheme(title?: string): EventTheme {
 }
 
 export default function EventDetailScreen({ route, navigation }: any) {
-  const { id } = route.params as { id: string }; // event id
+  const { id } = route.params as { id: string };
+  const { t, i18n } = useTranslation();
+  const insets = useSafeAreaInsets();
+  const { colors } = useTheme();
+
   const [event, setEvent] = useState<Event | null>(null);
   const [members, setMembers] = useState<MemberRow[]>([]);
   const [lists, setLists] = useState<ListRow[]>([]);
@@ -41,9 +50,9 @@ export default function EventDetailScreen({ route, navigation }: any) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [myUserId, setMyUserId] = useState<string | null>(null);
+
   const [membersOpen, setMembersOpen] = useState(false);
   const membersOpacity = React.useRef(new Animated.Value(0)).current;
-  const insets = useSafeAreaInsets();
 
   // Invite modal state
   const [inviteOpen, setInviteOpen] = useState(false);
@@ -69,6 +78,11 @@ export default function EventDetailScreen({ route, navigation }: any) {
     }).start();
   };
 
+  const goHome = () => {
+    if (navigation.canGoBack()) navigation.goBack();
+    else navigation.navigate('Events');
+  };
+
   const load = async () => {
     setLoading(true);
     const failsafe = setTimeout(() => setLoading(false), 8000);
@@ -77,6 +91,25 @@ export default function EventDetailScreen({ route, navigation }: any) {
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
       if (sessErr) throw sessErr;
       if (!session) return;
+
+      const { data: { user } } = await supabase.auth.getUser();
+
+      try {
+        const { data: allowed, error: accErr } = await supabase.rpc('event_is_accessible', {
+          p_event_id: id,
+          p_user: user?.id,
+        });
+        if (accErr) {
+          console.log('[EventDetail] event_is_accessible error', accErr);
+        } else if (allowed === false) {
+          Alert.alert('Upgrade required', 'You can access up to 3 events on Free.');
+          if (navigation.canGoBack()) navigation.goBack();
+          else navigation.navigate('Events');
+          return;
+        }
+      } catch (e) {
+        console.log('[EventDetail] event_is_accessible exception', e);
+      }
 
       // Event
       const { data: e, error: eErr } = await supabase
@@ -96,8 +129,6 @@ export default function EventDetailScreen({ route, navigation }: any) {
       if (mErr) throw mErr;
       setMembers(ms ?? []);
 
-      // Me + admin check (admin role OR event owner)
-      const { data: { user } } = await supabase.auth.getUser();
       setMyUserId(user?.id ?? null);
       const amAdminViaRole = !!ms?.find(m => m.user_id === user?.id && m.role === 'admin');
       const amOwner = !!(user && (e as any)?.owner_id && user.id === (e as any).owner_id);
@@ -158,14 +189,13 @@ export default function EventDetailScreen({ route, navigation }: any) {
         const cc = await fetchClaimCountsByList(listIds);
         setClaimCountByList(cc);
       } catch (cErr: any) {
-        console.log('[EventDetail] claim counts RPC error', cErr);
+        console.log('[eventDetail] claim counts RPC error', cErr);
         setClaimCountByList({});
       }
-
     } catch (err: any) {
-      console.error('EventDetail load()', err);
+      console.error('eventDetail load()', err);
       if (err?.code === 'PGRST116') { navigation.goBack(); return; }
-      Alert.alert('Load error', err?.message ?? String(err));
+      Alert.alert(t('eventDetail.alerts.loadErrorTitle'), err?.message ?? String(err));
     } finally {
       clearTimeout(failsafe);
       setLoading(false);
@@ -205,58 +235,34 @@ export default function EventDetailScreen({ route, navigation }: any) {
   // ----- Actions that header depends on
   const deleteEvent = useCallback(() => {
     if (!isAdmin) {
-      Alert.alert('Not allowed', 'Only an admin can delete this event.');
+      Alert.alert(t('eventDetail.alerts.notAllowedTitle'), t('eventDetail.alerts.onlyAdminDelete'));
       return;
     }
     if (!event) return;
     Alert.alert(
-      'Delete event?',
-      'This will remove all lists, items, and claims for this event for everyone.',
+      t('eventDetail.alerts.deleteTitle'),
+      t('eventDetail.alerts.deleteBody'),
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: t('eventDetail.alerts.cancel'), style: 'cancel' },
         {
-          text: 'Delete',
+          text: t('eventDetail.alerts.confirmDelete'),
           style: 'destructive',
           onPress: async () => {
             const { error } = await supabase.from('events').delete().eq('id', event.id);
-            if (error) return Alert.alert('Delete failed', error.message);
-            navigation.goBack();
+            if (error) return Alert.alert(t('eventDetail.alerts.deleteTitle'), error.message);
+            goHome();
           },
         },
       ]
     );
-  }, [isAdmin, event, navigation]);
-
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      headerRight: () =>
-        isAdmin ? (
-          <View style={{ flexDirection: 'row' }}>
-            <Pressable
-              onPress={() => navigation.navigate('EditEvent', { id })}
-              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-            >
-              <Text style={{ color: '#2e95f1', fontWeight: '700' }}>Edit</Text>
-            </Pressable>
-            <Pressable
-              onPress={deleteEvent}
-              style={{ paddingHorizontal: 12, paddingVertical: 6 }}
-            >
-              <Text style={{ color: '#c0392b', fontWeight: '700' }}>Delete</Text>
-            </Pressable>
-          </View>
-        ) : null,
-    });
-  }, [navigation, isAdmin, id, deleteEvent]);
+  }, [isAdmin, event, navigation, t]);
 
   const goEdit = React.useCallback(() => {
     if (!id) return;
     navigation.push('EditEvent', { id });
   }, [id, navigation]);
 
-  // ---- Invite actions
-
-  // Normalize anything into YYYY-MM-DD, or return undefined.
+  // ---- Invite helpers
   function toISODate(input: any): string | undefined {
     if (input == null) return undefined;
     if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.trim())) return input.trim();
@@ -276,7 +282,6 @@ export default function EventDetailScreen({ route, navigation }: any) {
     return `${y}-${m}-${day}`;
   }
 
-  // Try common date field names; you can collapse this to just `event.event_date` if that's guaranteed.
   function pickEventDate(ev: any): string | undefined {
     const candidates = [
       ev?.event_date, ev?.date, ev?.day, ev?.when, ev?.start_date, ev?.scheduled_at,
@@ -291,20 +296,19 @@ export default function EventDetailScreen({ route, navigation }: any) {
   const handleSendCode = async () => {
     if (!event?.join_code) return;
     await Share.share({
-      message: `Join my event "${event.title}": code ${event.join_code}`,
+      message: t('eventDetail.share.joinWithCode', { title: event.title, code: event.join_code }),
     });
     closeInvitePopup();
   };
 
   const handleSendEmail = async () => {
-    console.log('Send email pressed');
     if (!inviteEmail?.trim()) {
-      Alert.alert('Missing email', 'Please enter an email address.');
+      Alert.alert(t('eventDetail.invite.missingEmailTitle'), t('eventDetail.invite.missingEmailBody'));
       return;
     }
     if (!event) return;
 
-    const eventDate = pickEventDate(event); // date-only; optional
+    const eventDate = pickEventDate(event);
 
     setSending(true);
     try {
@@ -315,396 +319,433 @@ export default function EventDetailScreen({ route, navigation }: any) {
         eventTimezone: 'Europe/Stockholm',
         locationText: (event as any).location ?? undefined,
         eventUrl: `https://giftcircles.app/join?code=${encodeURIComponent(event.join_code)}`,
-        eventDate, // pass date-only if available
+        eventDate,
       } as any);
 
       if ((res as any)?.ok) {
-        Alert.alert('Invite sent', 'We’ve emailed your invite.');
+        Alert.alert(t('eventDetail.invite.sentTitle'), t('eventDetail.invite.sentBody'));
         setInviteEmail('');
         setInviteOpen(false);
       } else {
         const msg = (res as any)?.error || 'Unknown error';
-        Alert.alert('Send failed', msg);
+        Alert.alert(t('eventDetail.invite.sendFailedTitle'), msg);
       }
     } catch (e: any) {
-      Alert.alert('Send failed', e?.message ?? String(e));
+      Alert.alert(t('eventDetail.invite.sendFailedTitle'), e?.message ?? String(e));
     } finally {
       setSending(false);
     }
   };
 
-  // Remove member (admin/owner)
   const removeMember = useCallback(async (targetUserId: string) => {
     try {
       if (!event?.id) return;
       if (targetUserId === myUserId) {
-        Alert.alert('Use “Leave event”', 'To remove yourself, tap the Leave event button.');
+        Alert.alert(t('eventDetail.actions.leave'), t('eventDetail.alerts.leaveBody'));
         return;
       }
       const confirm = await new Promise<boolean>((resolve) => {
-        Alert.alert('Remove member?', 'They will be removed from this event and their claims cleared.', [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Remove', style: 'destructive', onPress: () => resolve(true) },
-        ]);
+        Alert.alert(
+          t('eventDetail.alerts.removeMemberTitle'),
+          t('eventDetail.alerts.removeMemberBody'),
+          [
+            { text: t('eventDetail.alerts.cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: t('eventDetail.members.remove'), style: 'destructive', onPress: () => resolve(true) },
+          ]
+        );
       });
       if (!confirm) return;
 
       const { error } = await supabase.rpc('remove_member', { p_event_id: event.id, p_user_id: targetUserId });
       if (error) {
         const msg = error.message ?? String(error);
-        if (msg.includes('not_authorized')) return Alert.alert('Not allowed', 'Only admins can remove members.');
-        if (msg.includes('target_not_member')) return Alert.alert('Already removed', 'This user is no longer a member.');
-        return Alert.alert('Remove failed', msg);
+        if (msg.includes('not_authorized'))
+          return Alert.alert(t('eventDetail.alerts.notAllowedTitle'), t('eventDetail.alerts.onlyAdminDelete'));
+        if (msg.includes('target_not_member'))
+          return Alert.alert(t('eventDetail.alerts.alreadyRemoved'), t('eventDetail.alerts.alreadyRemoved'));
+        return Alert.alert(t('eventDetail.alerts.removeFailed'), msg);
       }
-      Alert.alert('Member removed', 'They have been removed from the event.');
+      Alert.alert(t('eventDetail.alerts.memberRemoved'), t('eventDetail.alerts.memberRemoved'));
       await load();
     } catch (e: any) {
-      Alert.alert('Remove failed', e?.message ?? String(e));
+      Alert.alert(t('eventDetail.alerts.removeFailed'), e?.message ?? String(e));
     }
-  }, [event?.id, myUserId, load]);
+  }, [event?.id, myUserId, load, t]);
 
-  // Leave event (anyone)
   const leaveEvent = useCallback(async () => {
     try {
       if (!event?.id) return;
       const confirm = await new Promise<boolean>((resolve) => {
-        Alert.alert('Leave event?', 'You will be removed from this event and your claims cleared.', [
-          { text: 'Cancel', style: 'cancel', onPress: () => resolve(false) },
-          { text: 'Leave', style: 'destructive', onPress: () => resolve(true) },
-        ]);
+        Alert.alert(
+          t('eventDetail.alerts.leaveTitle'),
+          t('eventDetail.alerts.leaveBody'),
+          [
+            { text: t('eventDetail.alerts.cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: t('eventDetail.actions.leave'), style: 'destructive', onPress: () => resolve(true) },
+          ]
+        );
       });
       if (!confirm) return;
 
       const { error } = await supabase.rpc('leave_event', { p_event_id: event.id });
       if (error) {
         const msg = error.message ?? String(error);
-        if (msg.includes('not_member')) return Alert.alert('Not a member', 'You are not in this event.');
-        return Alert.alert('Leave failed', msg);
+        if (msg.includes('not_member')) return Alert.alert(t('eventDetail.alerts.notMember'), t('eventDetail.alerts.notMember'));
+        return Alert.alert(t('eventDetail.alerts.leaveFailed'), msg);
       }
-      Alert.alert('Left event', 'You have left the event.');
+      Alert.alert(t('eventDetail.alerts.leftEvent'), t('eventDetail.alerts.leftEvent'));
       navigation.goBack();
     } catch (e: any) {
-      Alert.alert('Leave failed', e?.message ?? String(e));
+      Alert.alert(t('eventDetail.alerts.leaveFailed'), e?.message ?? String(e));
     }
-  }, [event?.id, navigation]);
+  }, [event?.id, navigation, t]);
 
   if (loading && !event) {
     return (
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.background }}>
         <ActivityIndicator />
       </View>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#f6f8fa' }}>
-      {/* Header card with image (no gradients) */}
-      {(() => {
-        const th = getEventTheme(event?.title);
-        const img = pickEventImage(event?.title); // may be undefined
+    <Screen>
+    <TopBar
+          title={t('eventDetail.title', 'Event')}
+          right={
+            isAdmin ? (
+              <View style={{ flexDirection: 'row' }}>
+                <Pressable onPress={() => navigation.navigate('EditEvent', { id })} hitSlop={8} style={{ paddingHorizontal: 10 }}>
+                  <Text style={{ color: '#2e95f1', fontWeight: '700' }}>{t('eventDetail.toolbar.edit')}</Text>
+                </Pressable>
+                <Pressable onPress={deleteEvent} hitSlop={8} style={{ paddingHorizontal: 10 }}>
+                  <Text style={{ color: '#c0392b', fontWeight: '700' }}>{t('eventDetail.toolbar.delete')}</Text>
+                </Pressable>
+              </View>
+            ) : null
+          }
+        />
+      <View style={{ flex: 1, backgroundColor: colors.background }}>
+        {/* Header card with image */}
+        {(() => {
+          const th = getEventTheme(event?.title);
+          const img = pickEventImage(event?.title);
 
-        const frameStyle = {
-          margin: 16,
-          borderRadius: 16,
-          overflow: 'hidden' as const,
-          backgroundColor: 'rgba(0,0,0,0.8)',
-        };
-        const styles = StyleSheet.create({
-          button: {
-            paddingVertical: 8,
-            paddingHorizontal: 18,
-            borderRadius: 18,
-            alignItems: 'center',
-            justifyContent: 'center',
-          },
-          text: {
-            color: '#fff',
-            fontWeight: 'bold',
-            fontSize: 16,
-          },
-        });
-
-        const textColor = th.textColor;
-        const subTextColor = th.textColor;
-
-        if (img) {
-          return (
-            <View style={frameStyle}>
-              <ImageBackground
-                source={img}
-                resizeMode="cover"
-                style={{}}
-                imageStyle={{ margin: 0, borderRadius: 16, opacity: 0.5 }}
-              >
-                <View style={{ padding: 16 }}>
-                  {/* Title */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                    <Text style={{ color: textColor, fontSize: 22, fontWeight: '800' }}>{event?.title}</Text>
-                  </View>
-
-                  {/* Date (date-only) */}
-                  {(event as any)?.event_date ? (
-                    <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>
-                      {new Date((event as any).event_date).toLocaleDateString(undefined, {
-                        weekday: 'short', month: 'short', day: 'numeric', year: 'numeric',
-                      })}
-                    </Text>
-                  ) : null}
-
-                  {/* Actions */}
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                    <Pressable style={[styles.button, { backgroundColor: '#32CD32' }]} onPress={openInvitePopup}>
-                      <Text style={styles.text}>Share</Text>
-                    </Pressable>
-
-                    <Pressable style={[styles.button, { backgroundColor: '#ff7373' }]} onPress={leaveEvent}>
-                      <Text style={styles.text}>Leave</Text>
-                    </Pressable>
-                  </View>
-
-                  {/* Stats */}
-                  <View style={{ flexDirection: 'row', gap: 20, marginTop: 12 }}>
-                    <View>
-                      <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{memberCount}</Text>
-                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>Members</Text>
-                    </View>
-                    <View>
-                      <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{totalItems}</Text>
-                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>Items</Text>
-                    </View>
-                    <View>
-                      <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{totalClaimsVisible}</Text>
-                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>Claimed</Text>
-                    </View>
-                  </View>
-
-                  <View style={{ marginTop: 8 }}>
-                    <Text style={{ color: subTextColor, fontStyle: 'italic' }}>
-                      {isAdmin ? 'You are an admin of this event.' : 'Member access'}
-                    </Text>
-                  </View>
-                </View>
-              </ImageBackground>
-            </View>
-          );
-        }
-        return null;
-      })()}
-
-      {/* Members (collapsible, fade only) */}
-      <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
-        <Pressable
-          onPress={toggleMembers}
-          style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}
-        >
-          <Text style={{ fontSize: 16, fontWeight: '700' }}>Members</Text>
-          <View
-            style={{
-              flexDirection: 'row',
+          const frameStyle = {
+            margin: 16,
+            borderRadius: 16,
+            overflow: 'hidden' as const,
+            backgroundColor: 'rgba(0,0,0,0.8)',
+          };
+          const styles = StyleSheet.create({
+            button: {
+              paddingVertical: 8,
+              paddingHorizontal: 18,
+              borderRadius: 18,
               alignItems: 'center',
-              backgroundColor: membersOpen ? '#f3f4f6' : '#eaf2ff',
-              borderRadius: 999,
-              paddingVertical: 4,
-              paddingHorizontal: 10,
-            }}
+              justifyContent: 'center',
+            },
+            text: {
+              color: '#fff',
+              fontWeight: 'bold',
+              fontSize: 16,
+            },
+          });
+
+          const textColor = th.textColor;
+          const subTextColor = th.textColor;
+
+          if (img) {
+            return (
+              <View style={frameStyle}>
+                <ImageBackground
+                  source={img}
+                  resizeMode="cover"
+                  style={{}}
+                  imageStyle={{ margin: 0, borderRadius: 16, opacity: 0.5 }}
+                >
+                  <View style={{ padding: 16 }}>
+                    {/* Title */}
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ color: textColor, fontSize: 22, fontWeight: '800' }}>{event?.title}</Text>
+                    </View>
+
+                    {/* Date (date-only) */}
+                    {(event as any)?.event_date ? (
+                      <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>
+                        {formatDateLocalized((event as any).event_date, i18n.language)}
+                      </Text>
+                    ) : null}
+
+                    {/* Actions */}
+                    <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
+                      <Pressable style={[styles.button, { backgroundColor: '#32CD32' }]} onPress={openInvitePopup} hitSlop={12}>
+                        <Text style={styles.text}>{t('eventDetail.actions.share')}</Text>
+                      </Pressable>
+
+                      <Pressable style={[styles.button, { backgroundColor: '#ff7373' }]} onPress={leaveEvent} hitSlop={12}>
+                        <Text style={styles.text}>{t('eventDetail.actions.leave')}</Text>
+                      </Pressable>
+                    </View>
+
+                    {/* Stats */}
+                    <View style={{ flexDirection: 'row', gap: 20, marginTop: 12 }}>
+                      <View>
+                        <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{memberCount}</Text>
+                        <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>{t('eventDetail.stats.members')}</Text>
+                      </View>
+                      <View>
+                        <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{totalItems}</Text>
+                        <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>{t('eventDetail.stats.items')}</Text>
+                      </View>
+                      <View>
+                        <Text style={{ color: textColor, fontSize: 20, fontWeight: '800' }}>{totalClaimsVisible}</Text>
+                        <Text style={{ color: subTextColor, fontSize: 16, fontWeight: '600' }}>{t('eventDetail.stats.claimed')}</Text>
+                      </View>
+                    </View>
+
+                    <View style={{ marginTop: 8 }}>
+                      <Text style={{ color: subTextColor, fontStyle: 'italic' }}>
+                        {isAdmin ? t('eventDetail.header.adminNote') : t('eventDetail.header.memberNote')}
+                      </Text>
+                    </View>
+                  </View>
+                </ImageBackground>
+              </View>
+            );
+          }
+          return null;
+        })()}
+
+        {/* Members (collapsible, fade only) */}
+        <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
+          <Pressable
+            onPress={toggleMembers}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 }}
           >
-            <Text
-              style={{
-                fontSize: 13,
-                fontWeight: '700',
-                color: membersOpen ? '#374151' : '#2e95f1',
-                marginRight: 6,
-              }}
-            >
-              {membersOpen ? 'Hide' : 'Show'}
-            </Text>
+            <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('eventDetail.members.title')}</Text>
             <View
               style={{
-                paddingHorizontal: 6,
-                paddingVertical: 2,
+                flexDirection: 'row',
+                alignItems: 'center',
+                backgroundColor: membersOpen ? colors.card : 'rgba(46,149,241,0.15)',
                 borderRadius: 999,
-                backgroundColor: membersOpen ? '#e5e7eb' : '#d6e7ff',
+                paddingVertical: 4,
+                paddingHorizontal: 10,
+                borderWidth: membersOpen ? 1 : 0,
+                borderColor: colors.border,
               }}
             >
               <Text
                 style={{
-                  fontSize: 12,
-                  fontWeight: '800',
-                  color: membersOpen ? '#374151' : '#2e95f1',
+                  fontSize: 13,
+                  fontWeight: '700',
+                  color: membersOpen ? colors.text : '#2e95f1',
+                  marginRight: 6,
                 }}
               >
-                {members.length}
+                {membersOpen ? t('eventDetail.members.hide') : t('eventDetail.members.show')}
               </Text>
-            </View>
-          </View>
-        </Pressable>
-
-        {membersOpen && (
-          <Animated.View
-            style={{
-              opacity: membersOpacity,
-              backgroundColor: 'white',
-              borderRadius: 12,
-              padding: 12,
-              borderWidth: 1,
-              borderColor: '#eef2f7',
-            }}
-          >
-            {(members ?? []).map((m) => {
-              const display = (profileNames[m.user_id] ?? '').trim() || (m.user_id ?? '').slice(0, 6);
-              const isMe = myUserId === m.user_id;
-              const showRemove = isAdmin && !isMe;
-              return (
-                <View
-                  key={m.user_id}
-                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                    <Text style={{ fontWeight: '600' }}>{display}</Text>
-                    <Text style={{ marginLeft: 8, opacity: 0.6, fontSize: 12 }}>{m.role}</Text>
-                  </View>
-
-                  {showRemove && (
-                    <Pressable
-                      onPress={() => removeMember(m.user_id)}
-                      hitSlop={8}
-                      accessibilityRole="button"
-                      style={{ paddingVertical: 4 }}
-                    >
-                      <Text style={{ color: '#c0392b', fontWeight: '700' }}>Remove</Text>
-                    </Pressable>
-                  )}
-                </View>
-              );
-            })}
-          </Animated.View>
-        )}
-      </View>
-
-      {/* Actions */}
-      <View style={{ paddingHorizontal: 16, marginBottom: insets.bottom + 8, marginTop: 8 }}>
-        <Pressable
-          onPress={() => navigation.navigate('CreateList', { eventId: id })}
-          style={{
-            backgroundColor: '#2e95f1',
-            paddingVertical: 10,
-            paddingHorizontal: 16,
-            borderRadius: 10,
-            alignItems: 'center',
-          }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '700' }}>Create List</Text>
-        </Pressable>
-      </View>
-
-      {/* Lists section (now scrollable) */}
-      <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: insets.bottom + 24 }}>
-        <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8 }}>Lists</Text>
-
-        <FlatList
-          style={{ flex: 1 }}
-          data={lists}
-          keyExtractor={(l) => l.id}
-          contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
-          keyboardShouldPersistTaps="handled"
-          renderItem={({ item }) => {
-            const recipientIds = recipientsByList[item.id] ?? [];
-            const recipientNames = recipientIds
-              .map(uid => (profileNames[uid] ?? '').trim())
-              .filter(n => n.length > 0);
-
-            // Hide claim counts if I am a recipient on THIS list
-            const iAmRecipientOnThisList = myUserId ? recipientIds.includes(myUserId) : false;
-            const visibleClaimCount = iAmRecipientOnThisList ? undefined : (claimCountByList[item.id] || 0);
-
-            return (
-              <ListCard
-                name={item.name}
-                recipients={recipientNames}
-                itemCount={itemCountByList[item.id] || 0}
-                claimedCount={visibleClaimCount}
-                onPress={() => navigation.navigate('ListDetail', { id: item.id })}
-              />
-            );
-          }}
-          ListEmptyComponent={
-            <View style={{ backgroundColor: 'white', padding: 16, borderRadius: 12 }}>
-              <Text style={{ opacity: 0.7 }}>No lists yet. Create one to get started.</Text>
-            </View>
-          }
-        />
-      </View>
-
-      {/* Invite modal */}
-      <Modal
-        visible={inviteOpen}
-        transparent
-        animationType="fade"
-        statusBarTranslucent
-        presentationStyle="overFullScreen"
-        onRequestClose={closeInvitePopup}
-      >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-          <View
-            style={{
-              flex: 1,
-              backgroundColor: 'rgba(0,0,0,0.4)',
-              justifyContent: 'center',
-              padding: 20,
-            }}
-            pointerEvents="auto"
-          >
-            <KeyboardAvoidingView
-              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-              style={{ width: '100%' }}
-            >
               <View
                 style={{
-                  backgroundColor: 'white',
-                  borderRadius: 12,
-                  padding: 16,
-                  ...Platform.select({ android: { elevation: 6 }, ios: { zIndex: 10 } }),
+                  paddingHorizontal: 6,
+                  paddingVertical: 2,
+                  borderRadius: 999,
+                  backgroundColor: membersOpen ? colors.border : 'rgba(46,149,241,0.25)',
                 }}
               >
-                <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8 }}>
-                  Invite options
-                </Text>
-
-                <Text style={{ marginBottom: 6 }}>Send email</Text>
-                <TextInput
-                  autoCapitalize="none"
-                  keyboardType="email-address"
-                  placeholder="name@example.com"
-                  value={inviteEmail}
-                  onChangeText={setInviteEmail}
+                <Text
                   style={{
-                    borderWidth: 1,
-                    borderColor: '#ddd',
-                    borderRadius: 8,
-                    paddingHorizontal: 10,
-                    paddingVertical: 8,
-                    marginBottom: 12,
+                    fontSize: 12,
+                    fontWeight: '800',
+                    color: membersOpen ? colors.text : '#2e95f1',
                   }}
-                  returnKeyType="send"
-                  onSubmitEditing={handleSendEmail}
-                />
-
-                <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                  <Pressable onPress={closeInvitePopup} hitSlop={10} style={{ padding: 10 }}>
-                    <Text>Cancel</Text>
-                  </Pressable>
-                  <Pressable onPress={handleSendEmail} disabled={sending} style={{ padding: 10 }}>
-                    <Text style={{ fontWeight: '600' }}>{sending ? 'Sending…' : 'Send email'}</Text>
-                  </Pressable>
-                  <Pressable onPress={handleSendCode} disabled={sending} style={{ padding: 10 }}>
-                    <Text style={{ fontWeight: '600' }}>Send code</Text>
-                  </Pressable>
-                </View>
+                >
+                  {members.length}
+                </Text>
               </View>
-            </KeyboardAvoidingView>
-          </View>
-        </TouchableWithoutFeedback>
-      </Modal>
-    </View>
+            </View>
+          </Pressable>
+
+          {membersOpen && (
+            <Animated.View
+              style={{
+                opacity: membersOpacity,
+                backgroundColor: colors.card,
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+              }}
+            >
+              {(members ?? []).map((m) => {
+                const display = (profileNames[m.user_id] ?? '').trim() || (m.user_id ?? '').slice(0, 6);
+                const isMe = myUserId === m.user_id;
+                const showRemove = isAdmin && !isMe;
+                return (
+                  <View
+                    key={m.user_id}
+                    style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      <Text style={{ fontWeight: '600', color: colors.text }}>{display}</Text>
+                      <Text style={{ marginLeft: 8, opacity: 0.6, fontSize: 12, color: colors.text }}>
+                        {t(`eventDetail.members.roles.${m.role}`)}
+                      </Text>
+                    </View>
+
+                    {showRemove && (
+                      <Pressable
+                        onPress={() => removeMember(m.user_id)}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        style={{ paddingVertical: 4 }}
+                      >
+                        <Text style={{ color: '#c0392b', fontWeight: '700' }}>{t('eventDetail.members.remove')}</Text>
+                      </Pressable>
+                    )}
+                  </View>
+                );
+              })}
+            </Animated.View>
+          )}
+        </View>
+
+        {/* Actions */}
+        <View style={{ paddingHorizontal: 16, marginBottom: insets.bottom , marginTop: 8 }}>
+          <Pressable
+            onPress={() => navigation.navigate('CreateList', { eventId: id })}
+            style={{
+              backgroundColor: '#2e95f1',
+              paddingVertical: 10,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+            }}
+          >
+            <Text style={{ color: '#fff', fontWeight: '700' }}>{t('eventDetail.actions.createList')}</Text>
+          </Pressable>
+        </View>
+
+        {/* Lists section */}
+        <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: insets.bottom + 24, paddingTop: 16 }}>
+          <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8, color: colors.text }}>
+            {t('eventDetail.lists.title')}
+          </Text>
+
+          <FlatList
+            style={{ flex: 1 }}
+            data={lists}
+            keyExtractor={(l) => l.id}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+            keyboardShouldPersistTaps="handled"
+            renderItem={({ item }) => {
+              const recipientIds = recipientsByList[item.id] ?? [];
+              const recipientNames = recipientIds
+                .map(uid => (profileNames[uid] ?? '').trim())
+                .filter(n => n.length > 0);
+
+              // Hide claim counts if I am a recipient on THIS list
+              const iAmRecipientOnThisList = myUserId ? recipientIds.includes(myUserId) : false;
+              const visibleClaimCount = iAmRecipientOnThisList ? undefined : (claimCountByList[item.id] || 0);
+
+              return (
+                <ListCard
+                  name={item.name}
+                  recipients={recipientNames}
+                  itemCount={itemCountByList[item.id] || 0}
+                  claimedCount={visibleClaimCount}
+                  onPress={() => navigation.navigate('ListDetail', { id: item.id })}
+                />
+              );
+            }}
+            ListEmptyComponent={
+              <View style={{ backgroundColor: colors.card, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: colors.border }}>
+                <Text style={{ opacity: 0.8, fontWeight: '700', color: colors.text }}>{t('eventDetail.lists.emptyTitle')}</Text>
+                <Text style={{ opacity: 0.6, marginTop: 6, color: colors.text }}>{t('eventDetail.lists.emptyBody')}</Text>
+              </View>
+            }
+          />
+        </View>
+
+        {/* Invite modal */}
+        <Modal
+          visible={inviteOpen}
+          transparent
+          animationType="fade"
+          statusBarTranslucent
+          presentationStyle="overFullScreen"
+          onRequestClose={closeInvitePopup}
+        >
+          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
+            <View
+              style={{
+                flex: 1,
+                backgroundColor: 'rgba(0,0,0,0.4)',
+                justifyContent: 'center',
+                padding: 20,
+              }}
+              pointerEvents="auto"
+            >
+              <KeyboardAvoidingView
+                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+                style={{ width: '100%' }}
+              >
+                <View
+                  style={{
+                    backgroundColor: colors.card,
+                    borderRadius: 12,
+                    padding: 16,
+                    borderWidth: 1,
+                    borderColor: colors.border,
+                    ...Platform.select({ android: { elevation: 6 }, ios: { zIndex: 10 } }),
+                  }}
+                >
+                  <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8, color: colors.text }}>
+                    {t('eventDetail.invite.title')}
+                  </Text>
+
+                  <Text style={{ marginBottom: 6, color: colors.text }}>{t('eventDetail.invite.emailLabel')}</Text>
+                  <TextInput
+                    autoCapitalize="none"
+                    keyboardType="email-address"
+                    placeholder={t('eventDetail.invite.emailPlaceholder')}
+                    placeholderTextColor={colors.text + '99'}
+                    value={inviteEmail}
+                    onChangeText={setInviteEmail}
+                    style={{
+                      borderWidth: 1,
+                      borderColor: colors.border,
+                      borderRadius: 8,
+                      paddingHorizontal: 10,
+                      paddingVertical: 8,
+                      marginBottom: 12,
+                      color: colors.text,
+                      backgroundColor: colors.card,
+                    }}
+                    returnKeyType="send"
+                    onSubmitEditing={handleSendEmail}
+                  />
+
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
+                    <Pressable onPress={closeInvitePopup} hitSlop={10} style={{ padding: 10 }}>
+                      <Text style={{ color: colors.text }}>{t('eventDetail.invite.cancel')}</Text>
+                    </Pressable>
+                    <Pressable onPress={handleSendEmail} disabled={sending} style={{ padding: 10 }}>
+                      <Text style={{ fontWeight: '600', color: colors.text }}>
+                        {sending ? t('eventDetail.invite.sending') : t('eventDetail.invite.sendEmail')}
+                      </Text>
+                    </Pressable>
+                    <Pressable onPress={handleSendCode} disabled={sending} style={{ padding: 10 }}>
+                      <Text style={{ fontWeight: '600', color: '#2e95f1' }}>{t('eventDetail.invite.sendCode')}</Text>
+                    </Pressable>
+                  </View>
+                </View>
+              </KeyboardAvoidingView>
+            </View>
+          </TouchableWithoutFeedback>
+        </Modal>
+      </View>
+    </Screen>
   );
 }

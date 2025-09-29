@@ -1,5 +1,6 @@
 // src/components/ListCard.tsx
 import { View, Text, Pressable } from 'react-native';
+import { useTheme } from '@react-navigation/native';
 
 export default function ListCard({
   name,
@@ -14,6 +15,8 @@ export default function ListCard({
   claimedCount?: number | null;
   onPress: () => void;
 }) {
+  const { colors } = useTheme();
+
   const recipientsLine =
     recipients.length === 0
       ? '—'
@@ -29,7 +32,7 @@ export default function ListCard({
     <Pressable
       onPress={onPress}
       style={{
-        backgroundColor: 'white',
+        backgroundColor: colors.card,   // theme surface
         padding: 14,
         borderRadius: 14,
         marginBottom: 12,
@@ -38,17 +41,19 @@ export default function ListCard({
         shadowRadius: 8,
         shadowOffset: { width: 0, height: 2 },
         elevation: 2,
+        borderWidth: 1,
+        borderColor: colors.border,     // subtle border for dark mode definition
       }}
     >
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 16, fontWeight: '700' }}>{name}</Text>
-        <Text style={{ fontWeight: '600', color: '#63707e' }}>{claimedRight}</Text>
+        <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{name}</Text>
+        <Text style={{ fontWeight: '600', color: colors.text, opacity: 0.7 }}>{claimedRight}</Text>
       </View>
 
       {/* recipients */}
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 8 }}>
-        <Text style={{ opacity: 0.7, marginRight: 6 }}>For:</Text>
-        <Text style={{ fontWeight: '600' }}>{recipientsLine}</Text>
+        <Text style={{ color: colors.text, opacity: 0.7, marginRight: 6 }}>For:</Text>
+        <Text style={{ fontWeight: '600', color: colors.text }}>{recipientsLine}</Text>
       </View>
     </Pressable>
   );
