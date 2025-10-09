@@ -17,15 +17,40 @@ const inExpoGo = Constants.appOwnership === 'expo';
 export default function PreferencesCard() {
   const { colors } = useTheme();
   const { themePref, setThemePref, langPref, setLangPref } = useSettings();
-  const [pushEnabled, setPushEnabled] = useState<boolean>(false);
+  const [pushEnabled, setPushEnabled] = useState<boolean | null>(null);
   const [working, setWorking] = useState(false);
   const [langOpen, setLangOpen] = useState(false);
+  const [reminderDays, setReminderDays] = useState<number | null>(null);
+  const [loadingReminder, setLoadingReminder] = useState(false);
   const { t, i18n } = useTranslation();
 
-  // Load cached push state
+  // Load cached push state and reminder preference
   React.useEffect(() => {
-    AsyncStorage.getItem('pref.pushEnabled').then(v => setPushEnabled(v === '1'));
+    (async () => {
+      const pushValue = await AsyncStorage.getItem('pref.pushEnabled');
+      setPushEnabled(pushValue === '1');
+      await loadReminderDays();
+    })();
   }, []);
+
+  const loadReminderDays = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('reminder_days')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (data?.reminder_days !== undefined) {
+        setReminderDays(data.reminder_days);
+      }
+    } catch (e) {
+      console.error('Failed to load reminder days:', e);
+    }
+  };
   const setPushLocal = async (b: boolean) => {
     setPushEnabled(b);
     await AsyncStorage.setItem('pref.pushEnabled', b ? '1' : '0');
@@ -58,13 +83,18 @@ export default function PreferencesCard() {
     setWorking(true);
     try {
       if (!pushEnabled) {
+        console.log('[Push] Attempting to register...');
         const token = await ensurePushRegistered();
+        console.log('[Push] Got token:', token);
         if (!token) {
           Alert.alert('Permission needed', 'Enable notifications in system settings to receive alerts.');
+          setWorking(false);
           return;
         }
         await AsyncStorage.setItem('pref.pushToken', token);
+        console.log('[Push] Saving to DB...');
         await savePushTokenToDb(token);
+        console.log('[Push] Saved successfully');
         await setPushLocal(true);
         toast.success('Notifications enabled');
       } else {
@@ -73,6 +103,9 @@ export default function PreferencesCard() {
         await setPushLocal(false);
         toast.info('Notifications disabled');
       }
+    } catch (error) {
+      console.error('[Push] Toggle error:', error);
+      Alert.alert('Error', String(error));
     } finally {
       setWorking(false);
     }
@@ -126,6 +159,30 @@ export default function PreferencesCard() {
     setLangOpen(false);
   };
 
+  const updateReminderDays = async (days: number) => {
+    if (loadingReminder) return;
+    setLoadingReminder(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ reminder_days: days })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setReminderDays(days);
+      toast.success('Reminder preference updated');
+    } catch (e: any) {
+      console.error('Failed to update reminder days:', e);
+      toast.error('Update failed', e?.message ?? String(e));
+    } finally {
+      setLoadingReminder(false);
+    }
+  };
+
   return (
     <View
       style={{
@@ -143,27 +200,48 @@ export default function PreferencesCard() {
       </Text>
 
       {/* Push notifications */}
-      <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
-        <Text style={{ fontWeight: '600', color: colors.text }}>{t('profile.settings.push')}</Text>
-        <Pressable
-          onPress={onTogglePush}
-          style={{
-            backgroundColor: pushEnabled ? '#2e95f1' : colors.card,
-            paddingVertical: 8,
-            paddingHorizontal: 12,
-            borderRadius: 999,
-            minWidth: 110,
-            alignItems: 'center',
-            opacity: working ? 0.7 : 1,
-            borderWidth: pushEnabled ? 0 : 1,
-            borderColor: pushEnabled ? 'transparent' : colors.border,
-          }}
-        >
-          <Text style={{ color: pushEnabled ? '#fff' : colors.text, fontWeight: '700' }}>
-            {inExpoGo ? 'Use dev build' : pushEnabled ? 'On' : 'Off'}
+      {pushEnabled !== null && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
+          <Text style={{ fontWeight: '600', color: colors.text }}>{t('profile.settings.push')}</Text>
+          <Pressable
+            onPress={onTogglePush}
+            style={{
+              backgroundColor: pushEnabled ? '#2e95f1' : colors.card,
+              paddingVertical: 8,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              minWidth: 110,
+              alignItems: 'center',
+              opacity: working ? 0.7 : 1,
+              borderWidth: pushEnabled ? 0 : 1,
+              borderColor: pushEnabled ? 'transparent' : colors.border,
+            }}
+          >
+            <Text style={{ color: pushEnabled ? '#fff' : colors.text, fontWeight: '700' }}>
+              {inExpoGo ? 'Use dev build' : pushEnabled ? 'On' : 'Off'}
+            </Text>
+          </Pressable>
+        </View>
+      )}
+
+      {/* Purchase Reminders */}
+      {reminderDays !== null && (
+        <View style={{ marginTop: 12 }}>
+          <Text style={{ fontWeight: '600', marginBottom: 6, color: colors.text }}>
+            {t('profile.settings.purchaseReminders', 'Purchase Reminders')}
           </Text>
-        </Pressable>
-      </View>
+          <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
+            {t('profile.settings.purchaseRemindersDesc', 'Get notified to purchase claimed items before events')}
+          </Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+            <Chip active={reminderDays === 0} label={t('profile.common.off', 'Off')} onPress={() => updateReminderDays(0)} />
+            <Chip active={reminderDays === 1} label={t('profile.common.1day', '1 day')} onPress={() => updateReminderDays(1)} />
+            <Chip active={reminderDays === 3} label={t('profile.common.3days', '3 days')} onPress={() => updateReminderDays(3)} />
+            <Chip active={reminderDays === 7} label={t('profile.common.7days', '7 days')} onPress={() => updateReminderDays(7)} />
+            <Chip active={reminderDays === 14} label={t('profile.common.14days', '14 days')} onPress={() => updateReminderDays(14)} />
+          </View>
+        </View>
+      )}
 
       {/* Appearance */}
       <View style={{ marginTop: 12 }}>
@@ -281,8 +359,17 @@ async function ensurePushRegistered(): Promise<string | null> {
     (Constants as any)?.expoConfig?.extra?.eas?.projectId ||
     (Constants as any)?.easConfig?.projectId;
 
-  const token = await Notifications.getExpoPushTokenAsync({ projectId });
-  return token.data || null;
+  try {
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    console.log('[Push] Expo token obtained:', token.data);
+    return token.data || null;
+  } catch (error) {
+    console.error('[Push] Failed to get Expo token:', error);
+    // Fallback: try to get device push token (FCM token for Android)
+    const deviceToken = (await Notifications.getDevicePushTokenAsync()).data;
+    console.log('[Push] Using device token instead:', deviceToken);
+    return deviceToken || null;
+  }
 }
 
 async function savePushTokenToDb(token: string) {

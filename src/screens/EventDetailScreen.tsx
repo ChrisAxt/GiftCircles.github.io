@@ -1,9 +1,8 @@
 // src/screens/EventDetailScreen.tsx
 import React, { useCallback, useEffect, useMemo, useState, useLayoutEffect } from 'react';
 import {
-  View, Text, FlatList, Pressable, Alert, ActivityIndicator, Share, Animated, Easing,
-  ImageBackground, StyleSheet, Modal, TextInput, KeyboardAvoidingView, Platform,
-  TouchableWithoutFeedback, Keyboard,
+  View, Text, FlatList, Pressable, Alert, ActivityIndicator, Animated, Easing,
+  ImageBackground, StyleSheet,
 } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
@@ -11,17 +10,15 @@ import { Event } from '../types';
 import ListCard from '../components/ListCard';
 import { pickEventImage } from '../theme/eventImages';
 import { fetchClaimCountsByList } from '../lib/claimCounts';
-import { sendInviteEmail } from '../lib/email';
-import { useSession } from '../hooks/useSession';
 import { useTranslation } from 'react-i18next';
 import { formatDateLocalized } from '../utils/date';
 import { Screen } from '../components/Screen';
-import { useHeaderHeight } from '@react-navigation/elements';
-import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../components/TopBar';
+import { InviteUserModal } from '../components/InviteUserModal';
 
 type MemberRow = { event_id: string; user_id: string; role: 'giver' | 'recipient' | 'admin' };
-type ListRow = { id: string; event_id: string; name: string };
+type ListRow = { id: string; event_id: string; name: string; custom_recipient_name?: string | null };
 type EventTheme = { key: string; colors: string[]; textColor: string; };
 
 const IMAGE_OPACITY = 0.2;
@@ -56,16 +53,8 @@ export default function EventDetailScreen({ route, navigation }: any) {
 
   // Invite modal state
   const [inviteOpen, setInviteOpen] = useState(false);
-  const [inviteEmail, setInviteEmail] = useState('');
-  const [sending, setSending] = useState<boolean>(false);
   const openInvitePopup = () => setInviteOpen(true);
   const closeInvitePopup = () => setInviteOpen(false);
-
-  const sessionCtx = useSession(); // may be null initially
-  const inviterName =
-    sessionCtx?.profile?.full_name ??
-    sessionCtx?.profile?.display_name ??
-    'Someone';
 
   const toggleMembers = () => {
     const opening = !membersOpen;
@@ -93,11 +82,12 @@ export default function EventDetailScreen({ route, navigation }: any) {
       if (!session) return;
 
       const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
 
       try {
         const { data: allowed, error: accErr } = await supabase.rpc('event_is_accessible', {
           p_event_id: id,
-          p_user: user?.id,
+          p_user: user.id,
         });
         if (accErr) {
           console.log('[EventDetail] event_is_accessible error', accErr);
@@ -137,7 +127,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
       // Lists
       const { data: ls, error: lErr } = await supabase
         .from('lists')
-        .select('id,event_id,name')
+        .select('id,event_id,name,custom_recipient_name')
         .eq('event_id', id)
         .order('created_at', { ascending: false });
       if (lErr) throw lErr;
@@ -150,12 +140,16 @@ export default function EventDetailScreen({ route, navigation }: any) {
         : { data: [], error: null as any };
       if (rErr) throw rErr;
       const rb: Record<string, string[]> = {};
-      (lrs ?? []).forEach(r => { (rb[r.list_id] ||= []).push(r.user_id); });
+      (lrs ?? []).forEach(r => {
+        if (r.user_id) {
+          (rb[r.list_id] ||= []).push(r.user_id);
+        }
+      });
       setRecipientsByList(rb);
 
       // Names (members + recipients)
       const memberIds = (ms ?? []).map(m => m.user_id);
-      const recipientIds = (lrs ?? []).map(r => r.user_id);
+      const recipientIds = (lrs ?? []).map(r => r.user_id).filter(uid => uid != null);
       const allUserIds = Array.from(new Set([...memberIds, ...recipientIds]));
       if (allUserIds.length) {
         const { data: ps, error: pErr } = await supabase
@@ -234,7 +228,8 @@ export default function EventDetailScreen({ route, navigation }: any) {
 
   // ----- Actions that header depends on
   const deleteEvent = useCallback(() => {
-    if (!isAdmin) {
+    const isLastMember = members.length === 1;
+    if (!isAdmin && !isLastMember) {
       Alert.alert(t('eventDetail.alerts.notAllowedTitle'), t('eventDetail.alerts.onlyAdminDelete'));
       return;
     }
@@ -262,80 +257,6 @@ export default function EventDetailScreen({ route, navigation }: any) {
     navigation.push('EditEvent', { id });
   }, [id, navigation]);
 
-  // ---- Invite helpers
-  function toISODate(input: any): string | undefined {
-    if (input == null) return undefined;
-    if (typeof input === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(input.trim())) return input.trim();
-
-    const d =
-      input instanceof Date
-        ? input
-        : typeof input === 'number'
-          ? new Date(input < 1e12 ? input * 1000 : input)
-          : new Date(String(input));
-
-    if (!Number.isFinite(d.getTime())) return undefined;
-
-    const y = d.getUTCFullYear();
-    const m = String(d.getUTCMonth() + 1).padStart(2, '0');
-    const day = String(d.getUTCDate()).padStart(2, '0');
-    return `${y}-${m}-${day}`;
-  }
-
-  function pickEventDate(ev: any): string | undefined {
-    const candidates = [
-      ev?.event_date, ev?.date, ev?.day, ev?.when, ev?.start_date, ev?.scheduled_at,
-    ];
-    for (const c of candidates) {
-      const isoDate = toISODate(c);
-      if (isoDate) return isoDate;
-    }
-    return undefined;
-  }
-
-  const handleSendCode = async () => {
-    if (!event?.join_code) return;
-    await Share.share({
-      message: t('eventDetail.share.joinWithCode', { title: event.title, code: event.join_code }),
-    });
-    closeInvitePopup();
-  };
-
-  const handleSendEmail = async () => {
-    if (!inviteEmail?.trim()) {
-      Alert.alert(t('eventDetail.invite.missingEmailTitle'), t('eventDetail.invite.missingEmailBody'));
-      return;
-    }
-    if (!event) return;
-
-    const eventDate = pickEventDate(event);
-
-    setSending(true);
-    try {
-      const res = await sendInviteEmail({
-        to: inviteEmail.trim(),
-        inviterName,
-        eventName: event.title,
-        eventTimezone: 'Europe/Stockholm',
-        locationText: (event as any).location ?? undefined,
-        eventUrl: `https://giftcircles.app/join?code=${encodeURIComponent(event.join_code)}`,
-        eventDate,
-      } as any);
-
-      if ((res as any)?.ok) {
-        Alert.alert(t('eventDetail.invite.sentTitle'), t('eventDetail.invite.sentBody'));
-        setInviteEmail('');
-        setInviteOpen(false);
-      } else {
-        const msg = (res as any)?.error || 'Unknown error';
-        Alert.alert(t('eventDetail.invite.sendFailedTitle'), msg);
-      }
-    } catch (e: any) {
-      Alert.alert(t('eventDetail.invite.sendFailedTitle'), e?.message ?? String(e));
-    } finally {
-      setSending(false);
-    }
-  };
 
   const removeMember = useCallback(async (targetUserId: string) => {
     try {
@@ -410,21 +331,21 @@ export default function EventDetailScreen({ route, navigation }: any) {
 
   return (
     <Screen>
-    <TopBar
-          title={t('eventDetail.title', 'Event')}
-          right={
-            isAdmin ? (
-              <View style={{ flexDirection: 'row' }}>
-                <Pressable onPress={() => navigation.navigate('EditEvent', { id })} hitSlop={8} style={{ paddingHorizontal: 10 }}>
-                  <Text style={{ color: '#2e95f1', fontWeight: '700' }}>{t('eventDetail.toolbar.edit')}</Text>
-                </Pressable>
-                <Pressable onPress={deleteEvent} hitSlop={8} style={{ paddingHorizontal: 10 }}>
-                  <Text style={{ color: '#c0392b', fontWeight: '700' }}>{t('eventDetail.toolbar.delete')}</Text>
-                </Pressable>
-              </View>
-            ) : null
-          }
-        />
+      <TopBar
+        title={t('eventDetail.title', 'Event')}
+        right={
+          (isAdmin || members.length === 1) ? (
+            <View style={{ flexDirection: 'row' }}>
+              <Pressable onPress={() => navigation.navigate('EditEvent', { id })} hitSlop={8} style={{ paddingHorizontal: 10 }}>
+                <Text style={{ color: '#2e95f1', fontWeight: '700' }}>{t('eventDetail.toolbar.edit')}</Text>
+              </Pressable>
+              <Pressable onPress={deleteEvent} hitSlop={8} style={{ paddingHorizontal: 10 }}>
+                <Text style={{ color: '#c0392b', fontWeight: '700' }}>{t('eventDetail.toolbar.delete')}</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+      />
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         {/* Header card with image */}
         {(() => {
@@ -612,7 +533,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Actions */}
-        <View style={{ paddingHorizontal: 16, marginBottom: insets.bottom , marginTop: 8 }}>
+        <View style={{ paddingHorizontal: 16, marginBottom: insets.bottom, marginTop: 8 }}>
           <Pressable
             onPress={() => navigation.navigate('CreateList', { eventId: id })}
             style={{
@@ -645,6 +566,11 @@ export default function EventDetailScreen({ route, navigation }: any) {
                 .map(uid => (profileNames[uid] ?? '').trim())
                 .filter(n => n.length > 0);
 
+              // Add custom recipient name if it exists
+              const allRecipientNames = item.custom_recipient_name
+                ? [...recipientNames, item.custom_recipient_name.trim()]
+                : recipientNames;
+
               // Hide claim counts if I am a recipient on THIS list
               const iAmRecipientOnThisList = myUserId ? recipientIds.includes(myUserId) : false;
               const visibleClaimCount = iAmRecipientOnThisList ? undefined : (claimCountByList[item.id] || 0);
@@ -652,7 +578,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
               return (
                 <ListCard
                   name={item.name}
-                  recipients={recipientNames}
+                  recipients={allRecipientNames}
                   itemCount={itemCountByList[item.id] || 0}
                   claimedCount={visibleClaimCount}
                   onPress={() => navigation.navigate('ListDetail', { id: item.id })}
@@ -669,82 +595,15 @@ export default function EventDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Invite modal */}
-        <Modal
+        <InviteUserModal
           visible={inviteOpen}
-          transparent
-          animationType="fade"
-          statusBarTranslucent
-          presentationStyle="overFullScreen"
-          onRequestClose={closeInvitePopup}
-        >
-          <TouchableWithoutFeedback onPress={Keyboard.dismiss}>
-            <View
-              style={{
-                flex: 1,
-                backgroundColor: 'rgba(0,0,0,0.4)',
-                justifyContent: 'center',
-                padding: 20,
-              }}
-              pointerEvents="auto"
-            >
-              <KeyboardAvoidingView
-                behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-                style={{ width: '100%' }}
-              >
-                <View
-                  style={{
-                    backgroundColor: colors.card,
-                    borderRadius: 12,
-                    padding: 16,
-                    borderWidth: 1,
-                    borderColor: colors.border,
-                    ...Platform.select({ android: { elevation: 6 }, ios: { zIndex: 10 } }),
-                  }}
-                >
-                  <Text style={{ fontSize: 16, fontWeight: '600', marginBottom: 8, color: colors.text }}>
-                    {t('eventDetail.invite.title')}
-                  </Text>
-
-                  <Text style={{ marginBottom: 6, color: colors.text }}>{t('eventDetail.invite.emailLabel')}</Text>
-                  <TextInput
-                    autoCapitalize="none"
-                    keyboardType="email-address"
-                    placeholder={t('eventDetail.invite.emailPlaceholder')}
-                    placeholderTextColor={colors.text + '99'}
-                    value={inviteEmail}
-                    onChangeText={setInviteEmail}
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 8,
-                      paddingHorizontal: 10,
-                      paddingVertical: 8,
-                      marginBottom: 12,
-                      color: colors.text,
-                      backgroundColor: colors.card,
-                    }}
-                    returnKeyType="send"
-                    onSubmitEditing={handleSendEmail}
-                  />
-
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-end' }}>
-                    <Pressable onPress={closeInvitePopup} hitSlop={10} style={{ padding: 10 }}>
-                      <Text style={{ color: colors.text }}>{t('eventDetail.invite.cancel')}</Text>
-                    </Pressable>
-                    <Pressable onPress={handleSendEmail} disabled={sending} style={{ padding: 10 }}>
-                      <Text style={{ fontWeight: '600', color: colors.text }}>
-                        {sending ? t('eventDetail.invite.sending') : t('eventDetail.invite.sendEmail')}
-                      </Text>
-                    </Pressable>
-                    <Pressable onPress={handleSendCode} disabled={sending} style={{ padding: 10 }}>
-                      <Text style={{ fontWeight: '600', color: '#2e95f1' }}>{t('eventDetail.invite.sendCode')}</Text>
-                    </Pressable>
-                  </View>
-                </View>
-              </KeyboardAvoidingView>
-            </View>
-          </TouchableWithoutFeedback>
-        </Modal>
+          eventId={id}
+          eventTitle={event?.title || ''}
+          onClose={closeInvitePopup}
+          onInviteSent={() => {
+            load(); // Reload to show updated data
+          }}
+        />
       </View>
     </Screen>
   );

@@ -1,0 +1,359 @@
+=========================================
+GiftCircles Test Suite
+=========================================
+
+--- Running Smoke Tests ---
+psql:supabase/tests/smoke/integrity_smoke.sql:51: ERROR:  RLS not forced on public.events
+CONTEXT:  PL/pgSQL function inline_code_block line 12 at RAISE
+psql:supabase/tests/smoke/integrity_smoke.sql:65: ERROR:  Missing idx_lists_event_id
+CONTEXT:  PL/pgSQL function inline_code_block line 4 at RAISE
+DO
+DO
+psql:supabase/tests/smoke/rpc_smoke.sql:34: ERROR:  create_list_with_people not found
+CONTEXT:  PL/pgSQL function inline_code_block line 16 at RAISE
+psql:supabase/tests/smoke/rpc_smoke.sql:63: ERROR:  function public.create_event_and_admin(text, date, unknown, unknown) does not exist
+LINE 1: SELECT public.create_event_and_admin(''::text, current_date,...
+               ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+QUERY:  SELECT public.create_event_and_admin(''::text, current_date, 'none', null)
+CONTEXT:  PL/pgSQL function inline_code_block line 15 at PERFORM
+
+--- Running RPC Tests ---
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+DO
+SET
+ plan 
+------
+ 1..3
+(1 row)
+
+                                                throws_like                                                
+-----------------------------------------------------------------------------------------------------------
+ not ok 1 - empty title rejected                                                                          +
+ # Failed test 1: "empty title rejected"                                                                  +
+ #    error message: 'function public.create_event_and_admin(text, date, unknown, unknown) does not exist'+
+ #    doesn't match: 'invalid_parameter%'
+(1 row)
+
+                                                 throws_like                                                  
+--------------------------------------------------------------------------------------------------------------
+ not ok 2 - bad recurrence rejected                                                                          +
+ # Failed test 2: "bad recurrence rejected"                                                                  +
+ #    error message: 'function public.create_event_and_admin(unknown, date, unknown, unknown) does not exist'+
+ #    doesn't match: 'invalid_parameter%'
+(1 row)
+
+                              throws_like                              
+-----------------------------------------------------------------------
+ not ok 3 - empty join code rejected                                  +
+ # Failed test 3: "empty join code rejected"                          +
+ #    error message: 'function public.join_event(text) does not exist'+
+ #    doesn't match: 'invalid_parameter%'
+(1 row)
+
+                finish                
+--------------------------------------
+ # Looks like you failed 3 tests of 3
+(1 row)
+
+COMMIT
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+psql:supabase/tests/helpers/02_seed_minimal.sql:59: ERROR:  permission denied for table users
+CONTEXT:  SQL statement "select id              from auth.users order by created_at limit 1"
+PL/pgSQL function inline_code_block line 9 at SQL statement
+ROLLBACK
+psql:supabase/tests/rpc/claim_counts_visibility.sql:14: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+psql:supabase/tests/rpc/claim_counts_visibility.sql:48: ERROR:  function public.claim_counts_for_lists(uuid[]) does not exist
+LINE 16:       from public.claim_counts_for_lists(array[(select list_...
+                    ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+psql:supabase/tests/rpc/claim_counts_visibility.sql:80: ERROR:  function public.claim_counts_for_lists(uuid[]) does not exist
+LINE 14:       from public.claim_counts_for_lists(array[(select list_...
+                    ^
+HINT:  No function matches the given name and argument types. You might need to add explicit type casts.
+                finish                
+--------------------------------------
+ # Looks like you failed 3 tests of 3
+(1 row)
+
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+psql:supabase/tests/rpc/secdef_audit.sql:4: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+                                     ok                                      
+-----------------------------------------------------------------------------
+ not ok 4 - All SECURITY DEFINER functions set search_path to public        +
+ # Failed test 4: "All SECURITY DEFINER functions set search_path to public"
+(1 row)
+
+DO
+                    ok                     
+-------------------------------------------
+ ok 5 - Auth guard recommendation recorded
+(1 row)
+
+                   finish                   
+--------------------------------------------
+ # Looks like you planned 3 tests but ran 5
+(1 row)
+
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+psql:supabase/tests/helpers/02_seed_minimal.sql:59: ERROR:  permission denied for table users
+CONTEXT:  SQL statement "select id              from auth.users order by created_at limit 1"
+PL/pgSQL function inline_code_block line 9 at SQL statement
+ROLLBACK
+BEGIN
+DO
+SET
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:26: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:32: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:38: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:44: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:56: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:67: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:75: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:86: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:104: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/rpc_fuzz_validation.sql:106: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+psql:supabase/tests/helpers/01_impersonation.sql:14: ERROR:  permission denied for schema public
+BEGIN
+psql:supabase/tests/rpc/migration_017_tests.sql:12: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+psql:supabase/tests/rpc/migration_017_tests.sql:19: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:64: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:71: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:72: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:78: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:85: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:86: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:92: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:99: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:100: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:105: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:115: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:128: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:142: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:156: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:163: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:164: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:170: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:197: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:224: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:226: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:258: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:267: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:279: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:286: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:287: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:295: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:306: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/rpc/migration_017_tests.sql:312: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+
+--- Running Policy Tests ---
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+psql:supabase/tests/helpers/02_seed_minimal.sql:59: ERROR:  permission denied for table users
+CONTEXT:  SQL statement "select id              from auth.users order by created_at limit 1"
+PL/pgSQL function inline_code_block line 9 at SQL statement
+ROLLBACK
+BEGIN
+psql:supabase/tests/policies/rls_write_matrix.sql:14: ERROR:  permission denied for schema public
+psql:supabase/tests/policies/rls_write_matrix.sql:16: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:20: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:21: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:31: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:46: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:48: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:69: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:78: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:79: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:88: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:92: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:93: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:121: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_matrix.sql:123: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+psql:supabase/tests/helpers/02_seed_minimal.sql:59: ERROR:  permission denied for table users
+CONTEXT:  SQL statement "select id              from auth.users order by created_at limit 1"
+PL/pgSQL function inline_code_block line 9 at SQL statement
+ROLLBACK
+BEGIN
+psql:supabase/tests/policies/rls_write_denials.sql:15: ERROR:  permission denied for schema public
+psql:supabase/tests/policies/rls_write_denials.sql:17: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:21: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:22: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:32: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:47: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:49: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:70: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:79: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:80: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:89: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:93: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:94: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:122: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/rls_write_denials.sql:124: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+psql:supabase/tests/helpers/02_seed_minimal.sql:59: ERROR:  permission denied for table users
+CONTEXT:  SQL statement "select id              from auth.users order by created_at limit 1"
+PL/pgSQL function inline_code_block line 9 at SQL statement
+ROLLBACK
+BEGIN
+psql:supabase/tests/policies/policies_select_can_view_list.sql:7: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+psql:supabase/tests/policies/policies_select_can_view_list.sql:16: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:17: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:26: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:34: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:35: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:45: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:52: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:53: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:65: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+psql:supabase/tests/policies/policies_select_can_view_list.sql:68: ERROR:  current transaction is aborted, commands ignored until end of transaction block
+ROLLBACK
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+psql:supabase/tests/policies/policies_admin_wrappers.sql:3: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+                            ok                             
+-----------------------------------------------------------
+ not ok 6 - events update policy checks admin role        +
+ # Failed test 6: "events update policy checks admin role"+
+ #     (test result was NULL)
+(1 row)
+
+                             ok                             
+------------------------------------------------------------
+ not ok 7 - events delete uses 2-arg is_event_admin        +
+ # Failed test 7: "events delete uses 2-arg is_event_admin"+
+ #     (test result was NULL)
+(1 row)
+
+                                ok                                
+------------------------------------------------------------------
+ not ok 8 - claims delete policy uses is_event_admin(...)        +
+ # Failed test 8: "claims delete policy uses is_event_admin(...)"
+(1 row)
+
+                   finish                   
+--------------------------------------------
+ # Looks like you planned 3 tests but ran 8
+(1 row)
+
+
+--- Running Integrity Tests ---
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+BEGIN
+psql:supabase/tests/helpers/02_seed_minimal.sql:59: ERROR:  permission denied for table users
+CONTEXT:  SQL statement "select id              from auth.users order by created_at limit 1"
+PL/pgSQL function inline_code_block line 9 at SQL statement
+ROLLBACK
+psql:supabase/tests/integrity/rls_and_fk_tests.sql:5: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+                       ok                       
+------------------------------------------------
+ not ok 9 - RLS forced on public.events        +
+ # Failed test 9: "RLS forced on public.events"
+(1 row)
+
+                       ok                       
+------------------------------------------------
+ not ok 10 - RLS forced on public.lists        +
+ # Failed test 10: "RLS forced on public.lists"
+(1 row)
+
+                       ok                       
+------------------------------------------------
+ not ok 11 - RLS forced on public.items        +
+ # Failed test 11: "RLS forced on public.items"
+(1 row)
+
+                       ok                        
+-------------------------------------------------
+ not ok 12 - RLS forced on public.claims        +
+ # Failed test 12: "RLS forced on public.claims"
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok 13 - items FKs cascade on delete
+(1 row)
+
+                  ok                  
+--------------------------------------
+ ok 14 - claims FKs cascade on delete
+(1 row)
+
+                 ok                  
+-------------------------------------
+ ok 15 - lists FKs cascade on delete
+(1 row)
+
+                   finish                    
+---------------------------------------------
+ # Looks like you planned 3 tests but ran 15
+(1 row)
+
+psql:supabase/tests/helpers/00_enable_extensions.sql:2: NOTICE:  extension "pgtap" already exists, skipping
+CREATE EXTENSION
+DO
+psql:supabase/tests/integrity/cascade_runtime.sql:8: ERROR:  You tried to plan twice!
+CONTEXT:  PL/pgSQL function plan(integer) line 27 at RAISE
+                             ok                             
+------------------------------------------------------------
+ not ok 16 - events -> lists uses ON DELETE CASCADE        +
+ # Failed test 16: "events -> lists uses ON DELETE CASCADE"
+(1 row)
+
+                            ok                             
+-----------------------------------------------------------
+ not ok 17 - lists -> items uses ON DELETE CASCADE        +
+ # Failed test 17: "lists -> items uses ON DELETE CASCADE"
+(1 row)
+
+                                         ok                                          
+-------------------------------------------------------------------------------------
+ not ok 18 - items -> claims uses ON DELETE CASCADE (or claims table absent)        +
+ # Failed test 18: "items -> claims uses ON DELETE CASCADE (or claims table absent)"
+(1 row)
+
+                   finish                    
+---------------------------------------------
+ # Looks like you planned 3 tests but ran 18
+(1 row)
+
+
+=========================================
+All Tests Complete!
+=========================================

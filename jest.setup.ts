@@ -1,5 +1,8 @@
 // jest.setup.ts
 
+// Load test environment variables
+require('dotenv').config({ path: '.env.test' });
+
 // Mock Reanimated v2
 jest.mock('react-native-reanimated', () => require('react-native-reanimated/mock'));
 

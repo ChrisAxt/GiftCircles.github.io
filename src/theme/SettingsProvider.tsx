@@ -1,5 +1,5 @@
 import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { Appearance } from 'react-native';
+import { Appearance, ActivityIndicator, View } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import i18n from '../i18n'; // adjust if needed
 
@@ -20,9 +20,11 @@ const SettingsContext = createContext<SettingsContextType | undefined>(undefined
 
 export function SettingsProvider({ children }: { children: React.ReactNode }) {
   // If nothing saved, initialize to the device scheme once, then persist
-  const device = Appearance.getColorScheme();
-  const [themePref, setThemePrefState] = useState<ThemePref>('light');
+  const deviceScheme = Appearance.getColorScheme();
+  const initialTheme: ThemePref = deviceScheme === 'dark' ? 'dark' : 'light';
+  const [themePref, setThemePrefState] = useState<ThemePref>(initialTheme);
   const [langPref, setLangPrefState] = useState<string>('system');
+  const [isLoaded, setIsLoaded] = useState(false);
 
   // Load saved prefs once
   useEffect(() => {
@@ -36,7 +38,8 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
         // Map any legacy value 'system' to a one-time device choice
         if (storedTheme === 'light' || storedTheme === 'dark') {
           setThemePrefState(storedTheme);
-        } else if (storedTheme === 'system') {
+        } else if (storedTheme === 'system' || !storedTheme) {
+          // If no theme stored or 'system', use device scheme
           setThemePrefState(initialTheme);
           AsyncStorage.setItem('pref.theme', initialTheme).catch(() => {});
         }
@@ -48,6 +51,7 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
           }
         }
       } catch {}
+      setIsLoaded(true);
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -73,6 +77,15 @@ export function SettingsProvider({ children }: { children: React.ReactNode }) {
     langPref,
     setLangPref,
   }), [themePref, colorScheme, langPref]);
+
+  // Don't render children until settings are loaded to prevent flash
+  if (!isLoaded) {
+    return (
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: initialTheme === 'dark' ? '#000' : '#fff' }}>
+        <ActivityIndicator size="large" color={initialTheme === 'dark' ? '#fff' : '#000'} />
+      </View>
+    );
+  }
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
 }

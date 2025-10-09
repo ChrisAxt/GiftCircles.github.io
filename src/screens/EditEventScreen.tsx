@@ -19,6 +19,7 @@ import { LabeledInput, LabeledPressableField } from '../components/LabeledInput'
 import { Screen } from '../components/Screen';
 import { useTheme } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
+import { useSettings } from '../theme/SettingsProvider';
 
 type EventRow = {
   id: string;
@@ -53,6 +54,7 @@ export default function EditEventScreen({ route, navigation }: any) {
   const { id } = route.params as { id: string };
   const { t, i18n } = useTranslation();
   const { colors } = useTheme();
+  const { themePref } = useSettings();
 
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -221,7 +223,7 @@ export default function EditEventScreen({ route, navigation }: any) {
 
   return (
     <Screen>
-    <TopBar title={t('editEvent.screenTitle', 'Edit Event')} />
+      <TopBar title={t('editEvent.screenTitle', 'Edit Event')} />
       <View style={{ padding: 16, gap: 12 }}>
         <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('editEvent.title')}</Text>
 
@@ -253,6 +255,7 @@ export default function EditEventScreen({ route, navigation }: any) {
                 value={dateValue ?? new Date()}
                 mode="date"
                 display={Platform.OS === 'ios' ? 'inline' : 'default'}
+                themeVariant={themePref}
                 onChange={(event: any, picked?: Date) => {
                   setShowPicker(false);
                   if (event?.type === 'dismissed') return;

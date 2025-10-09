@@ -1,6 +1,6 @@
 // src/screens/ListDetailScreen.tsx
-import React, { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { View, Text, FlatList, Button, ActivityIndicator, Alert, Pressable, Platform } from 'react-native';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { View, Text, FlatList, Button, ActivityIndicator, Alert, Pressable, Platform, Linking } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -16,6 +16,7 @@ type Item = {
   name: string;
   url?: string | null;
   price?: number | null;
+  notes?: string | null;
   created_at?: string;
   created_by?: string | null;
 };
@@ -38,6 +39,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
   const [myUserId, setMyUserId] = useState<string | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [listEventId, setListEventId] = useState<string | null>(null);
+  const [eventMemberCount, setEventMemberCount] = useState<number>(0);
 
   const [claimedSummary, setClaimedSummary] = useState<{ claimed: number; unclaimed: number }>({ claimed: 0, unclaimed: 0 });
   const [claimedByName, setClaimedByName] = useState<Record<string, string>>({});
@@ -85,12 +87,18 @@ export default function ListDetailScreen({ route, navigation }: any) {
         itemIdsRef.current = new Set();
         return;
       }
+      console.log('[ListDetail] List data:', {
+        listId: listRow.id,
+        created_by: listRow.created_by,
+        currentUserId: user.id,
+        isOwner: listRow.created_by === user.id
+      });
       setListName(listRow.name || t('listDetail.title'));
       setIsOwner(listRow.created_by === user.id);
       setListEventId(listRow.event_id);
 
       if (listRow?.event_id) {
-        const [{ data: mem }, { data: ev }] = await Promise.all([
+        const [{ data: mem }, { data: ev }, { count: memberCount }] = await Promise.all([
           supabase
             .from('event_members')
             .select('role')
@@ -102,16 +110,22 @@ export default function ListDetailScreen({ route, navigation }: any) {
             .select('owner_id')
             .eq('id', listRow.event_id)
             .maybeSingle(),
+          supabase
+            .from('event_members')
+            .select('*', { count: 'exact', head: true })
+            .eq('event_id', listRow.event_id),
         ]);
         setIsAdmin(mem?.role === 'admin' || ev?.owner_id === user.id);
+        setEventMemberCount(memberCount ?? 0);
       } else {
         setIsAdmin(false);
+        setEventMemberCount(0);
       }
 
       // Items
       const { data: its, error: itemsErr } = await supabase
         .from('items')
-        .select('id,list_id,name,url,price,created_at,created_by')
+        .select('id,list_id,name,url,price,notes,created_at,created_by')
         .eq('list_id', id)
         .order('created_at', { ascending: false });
       if (itemsErr) throw itemsErr;
@@ -195,8 +209,10 @@ export default function ListDetailScreen({ route, navigation }: any) {
 
   const canDeleteItem = useCallback((item: Item) => {
     if (!myUserId) return false;
-    return item.created_by === myUserId || isOwner || isAdmin;
-  }, [myUserId, isOwner, isAdmin]);
+    // Can delete if: item creator, list owner, event admin, OR last remaining member
+    const isLastMember = eventMemberCount === 1;
+    return item.created_by === myUserId || isOwner || isAdmin || isLastMember;
+  }, [myUserId, isOwner, isAdmin, eventMemberCount]);
 
   const deleteItem = useCallback(async (item: Item) => {
     let confirmed = true;
@@ -297,18 +313,6 @@ export default function ListDetailScreen({ route, navigation }: any) {
   // focus load
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
-  useLayoutEffect(() => {
-    navigation.setOptions({
-      title: listName || t('listDetail.title'),
-      headerRight: () =>
-        isOwner ? (
-          <Pressable onPress={confirmDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-            <Text style={{ color: '#d9534f', fontWeight: '700' }}>{t('listDetail.actions.delete')}</Text>
-          </Pressable>
-        ) : null,
-    });
-  }, [navigation, listName, isOwner, confirmDelete, t]);
-
   // ----------------- UI -----------------
   if (loading) {
     return (
@@ -328,9 +332,25 @@ export default function ListDetailScreen({ route, navigation }: any) {
     );
   }
 
+  const canDeleteList = isOwner || isAdmin || eventMemberCount === 1;
+
   return (
     <Screen>
-    <TopBar title={t('listDetail.screenTitle', 'List')} />
+      <TopBar
+        title={listName || t('listDetail.screenTitle', 'List')}
+        right={
+          canDeleteList ? (
+            <View style={{ flexDirection: 'row' }}>
+              <Pressable onPress={() => navigation.navigate('EditList', { listId: id })} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Text style={{ color: '#2e95f1', fontWeight: '700' }}>Edit</Text>
+              </Pressable>
+              <Pressable onPress={confirmDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                <Text style={{ color: '#d9534f', fontWeight: '700' }}>{t('listDetail.actions.delete')}</Text>
+              </Pressable>
+            </View>
+          ) : null
+        }
+      />
       <View style={{ flex: 1, backgroundColor: colors.background, paddingTop: 16 }}>
         <View style={{ padding: 16 }}>
           <Pressable
@@ -365,22 +385,23 @@ export default function ListDetailScreen({ route, navigation }: any) {
             const claims = claimsByItem[item.id] ?? [];
 
             return (
-              <View
+              <Pressable
+                onPress={(isOwner || isAdmin) ? () => navigation.navigate('EditItem', { itemId: item.id }) : undefined}
                 style={{
                   marginHorizontal: 12,
                   marginVertical: 6,
-                  backgroundColor: colors.card,             // theme surface
+                  backgroundColor: colors.card,
                   borderRadius: 12,
                   padding: 12,
                   borderWidth: 1,
-                  borderColor: colors.border,               // theme border
+                  borderColor: colors.border,
                   shadowColor: '#000',
                   shadowOpacity: 0.04,
                   shadowRadius: 6,
                   shadowOffset: { width: 0, height: 2 },
                 }}
               >
-                {/* Header: name + delete */}
+                {/* Header: name + delete button */}
                 <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                   <Text style={{ fontSize: 16, fontWeight: '600', flex: 1, paddingRight: 8, color: colors.text }}>
                     {item.name}
@@ -397,12 +418,25 @@ export default function ListDetailScreen({ route, navigation }: any) {
                 </View>
 
                 {/* URL / Price */}
-                {item.url ? <Text selectable style={{ color: '#2e95f1', marginTop: 2 }}>{item.url}</Text> : null}
+                {item.url ? (
+                  <Pressable
+                    onPress={(e) => {
+                      e.stopPropagation();
+                      Linking.openURL(item.url!);
+                    }}
+                    style={{ maxWidth: '80%' }}
+                  >
+                    <Text numberOfLines={1} style={{ color: '#2e95f1', marginTop: 2, textDecorationLine: 'underline' }}>{item.url}</Text>
+                  </Pressable>
+                ) : null}
                 {typeof item.price === 'number' ? (
                   <Text style={{ marginTop: 2, color: colors.text }}>${Number(item.price).toFixed(2)}</Text>
                 ) : null}
+                {item.notes ? (
+                  <Text style={{ marginTop: 4, color: colors.text, opacity: 0.8, fontStyle: 'italic' }}>{item.notes}</Text>
+                ) : null}
 
-                {/* Claim info & button (recipients can’t see claimers) */}
+                {/* Claim info & button (recipients can't see claimers) */}
                 {!isRecipient ? (
                   <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ opacity: 0.7, color: colors.text }}>
@@ -427,7 +461,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
                     {t('listDetail.item.hiddenForRecipients')}
                   </Text>
                 )}
-              </View>
+              </Pressable>
             );
           }}
           ListEmptyComponent={

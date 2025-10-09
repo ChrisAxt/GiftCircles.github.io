@@ -30,7 +30,8 @@ export default function AddItemScreen({ route, navigation }: any) {
   const add = async () => {
     if (submitting) return;
     if (!name.trim()) {
-      toast.info(t('addItem.toasts.itemNameRequired.title'), t('addItem.toasts.itemNameRequired.body'));
+      toast.info(t('addItem.toasts.itemNameRequired.title'),
+      { text2: t('addItem.toasts.itemNameRequired.body')});
       return;
     }
 
@@ -42,7 +43,8 @@ export default function AddItemScreen({ route, navigation }: any) {
 
       const parsedPrice = parsePrice(price);
       if (price.trim() && parsedPrice === null) {
-        toast.info(t('addItem.toasts.invalidPrice.title'), t('addItem.toasts.invalidPrice.body'));
+        toast.info(t('addItem.toasts.invalidPrice.title'),
+        { text2: t('addItem.toasts.invalidPrice.body')});
         setSubmitting(false);
         return;
       }
@@ -77,7 +79,7 @@ export default function AddItemScreen({ route, navigation }: any) {
 
   return (
     <ScreenScroll >
-    <TopBar title={t('addItem.screenTitle', 'Add Item')} />
+      <TopBar title={t('addItem.screenTitle', 'Add Item')} />
       <View style={{ paddingTop: 16, paddingHorizontal: 16 }}>
         <LabeledInput
           label={t('addItem.labels.name')}

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "171549177337",
+    "project_id": "giftcircles",
+    "storage_bucket": "giftcircles.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:171549177337:android:4332d6a618df001347f928",
+        "android_client_info": {
+          "package_name": "com.giftcircles.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAeoE9otvfiY_Ouoqa4WEikqhAjQ88476Q"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

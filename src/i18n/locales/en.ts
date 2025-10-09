@@ -78,7 +78,7 @@ const en = {
         daysAgo_other: '{{count}} days ago',
         noDate: 'No date',
       },
-      actions: { share: 'Share', edit: 'Edit', delete: 'Delete', leave: 'Leave' },
+      actions: { share: 'Invite', edit: 'Edit', delete: 'Delete', leave: 'Leave' },
       alerts: {
         deleteTitle: 'Delete event?',
         deleteBody: 'This will remove all lists, items, and claims for this event for everyone.',
@@ -108,7 +108,7 @@ const en = {
         delete: 'Delete',
       },
       actions: {
-        share: 'Share',
+        share: 'Invite',
         leave: 'Leave',
         createList: 'Create List',
       },
@@ -302,7 +302,7 @@ const en = {
         notClaimed: 'Not claimed yet',
         claimedByYou: 'Claimed by: You',
         claimedByName: 'Claimed by: {{name}}',
-        hiddenForRecipients: 'Who’s buying remains hidden from recipients.',
+        hiddenForRecipients: 'Claimed by: Hidden',
         someone: 'Someone',
       },
       confirm: {
@@ -371,6 +371,104 @@ const en = {
       alertInvalidTitle: 'Invalid code',
       alertInvalidBody: 'That join code was not found.',
       alertFailedTitle: 'Join failed',
+    },
+    onboarding: {
+      slides: {
+        gettingStarted: {
+          title: 'Getting Started',
+          caption: 'Your Events screen shows all your events. Tap "Create" to make your first event.',
+        },
+        createEvent: {
+          title: 'Create an Event',
+          caption: 'Give your event a title and optionally add a date. You can invite others later with a join code.',
+        },
+        addList: {
+          title: 'Create Gift Lists',
+          caption: 'Inside an event, create lists for gift recipients. You can control who can see each list.',
+        },
+        claimItems: {
+          title: 'Claim Items Secretly',
+          caption: 'Mark items you\'ll purchase. Recipients never see who claimed what, keeping gifts a surprise!',
+        },
+        myClaims: {
+          title: 'Track Your Purchases',
+          caption: 'View all your claimed items in one place. Mark items as purchased to keep track of your shopping progress.',
+        },
+        joinByCode: {
+          title: 'Join by Code',
+          caption: 'Friends can join your event using a short code you share with them.',
+        },
+        yourEvents: {
+          title: 'Your Events',
+          caption: 'Event cards show dates and safe claim counts. You won\'t see claims on lists where you\'re a recipient.',
+        },
+      },
+      actions: {
+        skip: 'Skip',
+        finish: 'Finish',
+        next: 'Next',
+        startUsing: 'Start using GiftCircles',
+      },
+    },
+    errors: {
+      auth: {
+        notAuthenticatedTitle: 'Sign in required',
+        notAuthenticatedMessage: 'Please sign in to continue',
+        notAuthorizedTitle: 'Access denied',
+        notAuthorizedMessage: "You don't have permission to do that",
+        mustBeMemberTitle: 'Not a member',
+        mustBeMemberMessage: 'You must be a member of this event to do that',
+        notMemberTitle: 'Not a member',
+        notMemberMessage: 'You are not a member of this event',
+      },
+      limits: {
+        freeLimitTitle: 'Upgrade required',
+        freeLimitMessage: 'You can create up to 3 events on the free plan. Upgrade to create more.',
+        joinLimitMessage: 'You can only be a member of 3 events on the free plan. Upgrade to join more events or leave an existing event first.',
+        eventAccessMessage: 'You can access up to 3 events on the free plan. This event is locked. Upgrade to access all your events.',
+      },
+      validation: {
+        titleRequiredTitle: 'Title required',
+        titleRequiredMessage: 'Please enter a title for your event',
+        nameRequiredTitle: 'Name required',
+        nameRequiredMessage: 'Please enter a name',
+        codeRequiredTitle: 'Code required',
+        codeRequiredMessage: 'Please enter a join code',
+        invalidRecurrenceTitle: 'Invalid recurrence',
+        invalidRecurrenceMessage: 'Please select a valid recurrence option',
+        invalidVisibilityTitle: 'Invalid visibility',
+        invalidVisibilityMessage: 'Please select a valid visibility option',
+        invalidDateTitle: 'Invalid date',
+        invalidDateMessage: 'Event date must be today or in the future',
+        invalidInputTitle: 'Invalid input',
+        invalidInputMessage: 'Please check your input and try again',
+        invalidJoinCodeTitle: 'Invalid code',
+        invalidJoinCodeMessage: 'This join code is not valid. Please check and try again.',
+      },
+      items: {
+        hasClaimsTitle: 'Cannot delete',
+        hasClaimsMessage: 'This item has claims and cannot be deleted',
+        notFoundTitle: 'Not found',
+        notFoundMessage: 'The item you requested could not be found',
+      },
+      database: {
+        emailTakenTitle: 'Email already registered',
+        emailTakenMessage: 'This email is already in use',
+        duplicateTitle: 'Duplicate entry',
+        duplicateMessage: 'This item already exists',
+        invalidReferenceTitle: 'Invalid reference',
+        invalidReferenceMessage: 'Cannot complete action due to missing reference',
+        missingFieldTitle: 'Missing required field',
+        missingFieldMessage: 'Please fill in all required fields',
+      },
+      network: {
+        connectionTitle: 'Connection error',
+        connectionMessage: 'Please check your internet connection and try again',
+      },
+      generic: {
+        title: 'Something went wrong',
+        message: 'An unexpected error occurred. Please try again.',
+      },
     },
   },
 } as const;

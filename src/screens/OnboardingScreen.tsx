@@ -1,11 +1,10 @@
 // src/screens/OnboardingScreen.tsx
 import React, { useMemo, useRef, useState } from 'react';
-import { View, Text, Pressable, ScrollView, Dimensions, NativeScrollEvent, NativeSyntheticEvent } from 'react-native';
+import { View, Text, Pressable, ScrollView, Dimensions, NativeScrollEvent, NativeSyntheticEvent, useWindowDimensions } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { LinearGradient } from 'expo-linear-gradient';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
-
-const { width } = Dimensions.get('window');
+import { useTranslation } from 'react-i18next';
 
 /** ---------- Tiny UI primitives to draw mock screens ---------- */
 function Card({ children, style = {} as any }) {
@@ -56,14 +55,14 @@ function FakeButton({
   // colors
   const bg =
     tone === 'primary' ? '#2e95f1' :
-    tone === 'danger'  ? '#d9534f' :
-    tone === 'success' ? '#21c36b' :
-    tone === 'muted'   ? '#eef2f7' :
-                         'transparent';           // link = transparent
+      tone === 'danger' ? '#d9534f' :
+        tone === 'success' ? '#21c36b' :
+          tone === 'muted' ? '#eef2f7' :
+            'transparent';           // link = transparent
 
   const fg =
-    tone === 'link'   ? '#2e95f1' :
-    tone === 'muted'  ? '#1f2937' : 'white';
+    tone === 'link' ? '#2e95f1' :
+      tone === 'muted' ? '#1f2937' : 'white';
 
   return (
     <View
@@ -145,40 +144,45 @@ function MiniStat({ title, value }: { title: string; value: number | string }) {
       style={{
         flex: 1,
         backgroundColor: 'white',
-        paddingVertical: 14,
+        paddingVertical: 12,
+        paddingHorizontal: 4,
         borderRadius: 14,
         alignItems: 'center',
         justifyContent: 'center',
+        minHeight: 70,
       }}
     >
       <Text style={{ fontSize: 20, fontWeight: '800' }}>{String(value)}</Text>
-      <Text style={{ marginTop: 4, opacity: 0.7 }}>{title}</Text>
+      <Text style={{ marginTop: 4, opacity: 0.7, fontSize: 10, textAlign: 'center', lineHeight: 13 }}>{title}</Text>
     </View>
   );
 }
 
-/** ---------- Mock “screens” for the tour ---------- */
-function CreateEventMock() {
+/** ---------- Mock "screens" for the tour ---------- */
+function CreateEventMock({ isSmall = false }: { isSmall?: boolean }) {
+  const spacing = isSmall ? 6 : 10;
+  const finalSpacing = isSmall ? 8 : 14;
+
   return (
     <Card>
       <SectionTitle>Create Event</SectionTitle>
       <Label>Title</Label>
-      <FakeInput placeholder="e.g. Bob’s Birthday" />
-      <View style={{ height: 10 }} />
+      <FakeInput placeholder="e.g. Bob's Birthday" />
+      <View style={{ height: spacing }} />
       <Label>Description (optional)</Label>
       <FakeInput placeholder="Add details for invitees" />
-      <View style={{ height: 10 }} />
+      <View style={{ height: spacing }} />
       <Label>Date</Label>
       <FakeInput placeholder="Wed, Dec 18, 2025" narrow />
-      <View style={{ height: 10 }} />
+      <View style={{ height: spacing }} />
       <Label>Recurs</Label>
       <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -4, marginTop: 2 }}>
-        <FakeButton title="None"    tone="muted" style={{ margin: 4 }} />
-        <FakeButton title="Weekly"  tone="muted" style={{ margin: 4 }} />
+        <FakeButton title="None" tone="muted" style={{ margin: 4 }} />
+        <FakeButton title="Weekly" tone="muted" style={{ margin: 4 }} />
         <FakeButton title="Monthly" tone="muted" style={{ margin: 4 }} />
-        <FakeButton title="Yearly"  tone="muted" style={{ margin: 4 }} />
+        <FakeButton title="Yearly" tone="muted" style={{ margin: 4 }} />
       </View>
-      <View style={{ height: 14 }} />
+      <View style={{ height: finalSpacing }} />
       <FormButton title="Create" />
     </Card>
   );
@@ -262,13 +266,105 @@ function EventCardMock() {
   return (
     <Card style={{ padding: 14 }}>
       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-        <Text style={{ fontSize: 16, fontWeight: '700' }}>Bob’s Birthday</Text>
+        <Text style={{ fontSize: 16, fontWeight: '700' }}>Bob's Birthday</Text>
         <Pill text="in 12 days" />
       </View>
       <Text style={{ marginTop: 2, opacity: 0.7 }}>Tue, Nov 18, 2025</Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 12, justifyContent: 'space-between' }}>
         <Text style={{ opacity: 0.7 }}>8 members</Text>
         <Text style={{ fontWeight: '600', color: '#63707e' }}>3/12 claimed</Text>
+      </View>
+    </Card>
+  );
+}
+
+function MyClaimsMock({ isSmall = false }: { isSmall?: boolean }) {
+  const itemPadding = isSmall ? 12 : 14;
+  const titleSize = isSmall ? 15 : 16;
+  const subtitleSize = isSmall ? 12 : 13;
+  const buttonPadding = isSmall ? 5 : 6;
+  const buttonTextSize = isSmall ? 11 : 12;
+
+  return (
+    <Card style={{ padding: 0 }}>
+      {/* Header - matching actual screen */}
+      <View style={{ padding: itemPadding, backgroundColor: '#f9fafb', borderTopLeftRadius: 16, borderTopRightRadius: 16 }}>
+        <Text style={{ fontSize: isSmall ? 15 : 16, fontWeight: '700' }}>My claimed items</Text>
+      </View>
+
+      {/* Claimed item 1 - Not purchased (green button) */}
+      <View style={{ padding: itemPadding, borderBottomWidth: 1, borderBottomColor: '#eef2f7' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ fontWeight: '700', fontSize: titleSize }}>Noise-canceling headphones</Text>
+            <Text style={{ opacity: 0.75, fontSize: subtitleSize, marginTop: 4 }}>Bob's Birthday · Gifts for Bob</Text>
+          </View>
+          <Pressable
+            style={{
+              paddingVertical: buttonPadding,
+              paddingHorizontal: isSmall ? 10 : 12,
+              borderRadius: 999,
+              backgroundColor: '#e9f8ec',
+              borderWidth: 1,
+              borderColor: '#bce9cb',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Text style={{ fontWeight: '800', fontSize: buttonTextSize, color: '#1f9e4a' }}>
+              Mark purchased
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Claimed item 2 - Purchased (red button) */}
+      <View style={{ padding: itemPadding, borderBottomWidth: 1, borderBottomColor: '#eef2f7' }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ fontWeight: '700', fontSize: titleSize }}>Cookbook</Text>
+            <Text style={{ opacity: 0.75, fontSize: subtitleSize, marginTop: 4 }}>Bob's Birthday · Gifts for Bob</Text>
+          </View>
+          <Pressable
+            style={{
+              paddingVertical: buttonPadding,
+              paddingHorizontal: isSmall ? 10 : 12,
+              borderRadius: 999,
+              backgroundColor: '#fde8e8',
+              borderWidth: 1,
+              borderColor: '#f8c7c7',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Text style={{ fontWeight: '800', fontSize: buttonTextSize, color: '#c0392b' }}>
+              Mark not purchased
+            </Text>
+          </Pressable>
+        </View>
+      </View>
+
+      {/* Claimed item 3 - Not purchased (green button) */}
+      <View style={{ padding: itemPadding }}>
+        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <View style={{ flex: 1, paddingRight: 8 }}>
+            <Text style={{ fontWeight: '700', fontSize: titleSize }}>Board game set</Text>
+            <Text style={{ opacity: 0.75, fontSize: subtitleSize, marginTop: 4 }}>Family Xmas · Games</Text>
+          </View>
+          <Pressable
+            style={{
+              paddingVertical: buttonPadding,
+              paddingHorizontal: isSmall ? 10 : 12,
+              borderRadius: 999,
+              backgroundColor: '#e9f8ec',
+              borderWidth: 1,
+              borderColor: '#bce9cb',
+              alignSelf: 'flex-start',
+            }}
+          >
+            <Text style={{ fontWeight: '800', fontSize: buttonTextSize, color: '#1f9e4a' }}>
+              Mark purchased
+            </Text>
+          </Pressable>
+        </View>
       </View>
     </Card>
   );
@@ -298,6 +394,7 @@ function GettingStartedMock() {
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 12 }}>
           <MiniStat title="Active Events" value={2} />
           <MiniStat title="Items Claimed" value={5} />
+          <MiniStat title="To Purchase" value={3} />
         </View>
       </LinearGradient>
 
@@ -356,9 +453,12 @@ type Slide =
   | { kind: 'mock'; title: string; caption: string; render: () => JSX.Element; cta?: { label: string; onPress: () => void } };
 
 export default function OnboardingScreen({ navigation }: any) {
+  const { t } = useTranslation();
   const scrollRef = useRef<ScrollView>(null);
   const [index, setIndex] = useState(0);
   const insets = useSafeAreaInsets();
+  const { width, height } = useWindowDimensions();
+  const isSmallScreen = height < 700; // Detect small screens
 
   const finish = async (navigateTo?: { name: string; params?: any }) => {
     try {
@@ -367,47 +467,53 @@ export default function OnboardingScreen({ navigation }: any) {
       // ignore; keep UX flowing
     }
     if (navigateTo) {
-      navigation.reset({ index: 0, routes: [{ name: 'Tabs' }, { name: navigateTo.name as any, params: navigateTo.params }] });
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }, { name: navigateTo.name as any, params: navigateTo.params }] });
     } else {
-      navigation.reset({ index: 0, routes: [{ name: 'Tabs' }] });
+      navigation.reset({ index: 0, routes: [{ name: 'Home' }] });
     }
   };
 
   const SLIDES: Slide[] = [
     {
       kind: 'mock',
-      title: 'Getting Started',
-      caption: 'This is your Events screen. Tap the “Create” button (top-right) to make your first event.',
+      title: t('onboarding.slides.gettingStarted.title'),
+      caption: t('onboarding.slides.gettingStarted.caption'),
       render: () => <GettingStartedMock />,
     },
     {
       kind: 'mock',
-      title: 'Create an Event',
-      caption: 'Give your event a title, optionally add a date and recurrence. You can invite others later with a join code.',
-      render: () => <CreateEventMock />,
+      title: t('onboarding.slides.createEvent.title'),
+      caption: t('onboarding.slides.createEvent.caption'),
+      render: () => <CreateEventMock isSmall={isSmallScreen} />,
     },
     {
       kind: 'mock',
-      title: 'Add a List & Recipients',
-      caption: 'Inside an event, create lists for one or more recipients. You can also restrict list visibility to selected people.',
+      title: t('onboarding.slides.addList.title'),
+      caption: t('onboarding.slides.addList.caption'),
       render: () => <CreateListMock />,
     },
     {
       kind: 'mock',
-      title: 'Claim Items (Recipients can’t see!)',
-      caption: 'Givers claim an item so others don’t duplicate. Recipients never see who claimed, and claim counts can be hidden from them.',
+      title: t('onboarding.slides.claimItems.title'),
+      caption: t('onboarding.slides.claimItems.caption'),
       render: () => <ListDetailMock />,
     },
     {
       kind: 'mock',
-      title: 'Join by Code',
-      caption: 'Friends can join your event quickly using a short code you share.',
+      title: t('onboarding.slides.myClaims.title'),
+      caption: t('onboarding.slides.myClaims.caption'),
+      render: () => <MyClaimsMock isSmall={isSmallScreen} />,
+    },
+    {
+      kind: 'mock',
+      title: t('onboarding.slides.joinByCode.title'),
+      caption: t('onboarding.slides.joinByCode.caption'),
       render: () => <JoinEventMock />,
     },
     {
       kind: 'mock',
-      title: 'Your Events',
-      caption: 'Event tiles show the date status and safe claim counts (you won’t see claims on lists where you’re a recipient).',
+      title: t('onboarding.slides.yourEvents.title'),
+      caption: t('onboarding.slides.yourEvents.caption'),
       render: () => <EventCardMock />,
     },
   ];
@@ -428,21 +534,18 @@ export default function OnboardingScreen({ navigation }: any) {
 
   const slide = SLIDES[index];
 
-  const skipOrFinishLabel = useMemo(() => (canNext ? 'Skip' : 'Finish'), [canNext]);
+  const skipOrFinishLabel = useMemo(() => (canNext ? t('onboarding.actions.skip') : t('onboarding.actions.finish')), [canNext, t]);
 
   return (
     <SafeAreaView style={{ flex: 1, backgroundColor: '#0ea5e9' }} edges={['top', 'left', 'right']}>
-      {/* Header */}
-      <View style={{ paddingTop: 64, paddingHorizontal: 20 }}>
-        <Text style={{ color: 'white', fontSize: 28, fontWeight: '800' }}>
+      {/* Header - Responsive padding */}
+      <View style={{ paddingTop: isSmallScreen ? 32 : 64, paddingHorizontal: 20 }}>
+        <Text style={{ color: 'white', fontSize: isSmallScreen ? 22 : 28, fontWeight: '800' }}>
           {slide.title}
-        </Text>
-        <Text style={{ color: 'white', opacity: 0.9, marginTop: 6 }}>
-          Preview of the actual UI you’ll use
         </Text>
       </View>
 
-      {/* Slides */}
+      {/* Slides - Make scrollable with flex */}
       <ScrollView
         ref={scrollRef}
         horizontal
@@ -450,18 +553,30 @@ export default function OnboardingScreen({ navigation }: any) {
         showsHorizontalScrollIndicator={false}
         onScroll={onScroll}
         scrollEventThrottle={16}
-        style={{ marginTop: 20 }}
+        style={{ marginTop: isSmallScreen ? 12 : 20, flex: 1 }}
       >
         {SLIDES.map((s, i) => (
           <View key={i} style={{ width, paddingHorizontal: 20 }}>
-            {s.render()}
-            <Text style={{ color: 'white', marginTop: 12, marginHorizontal: 20 }}>{s.caption}</Text>
+            <ScrollView
+              showsVerticalScrollIndicator={false}
+              contentContainerStyle={{ paddingBottom: isSmallScreen ? 80 : 20 }}
+            >
+              {s.render()}
+              <Text style={{
+                color: 'white',
+                marginTop: 12,
+                fontSize: isSmallScreen ? 13 : 14,
+                lineHeight: isSmallScreen ? 18 : 20,
+              }}>
+                {s.caption}
+              </Text>
+            </ScrollView>
           </View>
         ))}
       </ScrollView>
 
       {/* Dots */}
-      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: 16 }}>
+      <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', marginTop: isSmallScreen ? 8 : 16 }}>
         {SLIDES.map((_, i) => (
           <View
             key={i}
@@ -475,9 +590,18 @@ export default function OnboardingScreen({ navigation }: any) {
       </View>
 
       {/* Actions */}
-      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingHorizontal: 20, marginTop: 20, marginBottom: 32 }}>
+      <View style={{
+        flexDirection: 'row',
+        justifyContent: 'space-between',
+        alignItems: 'center',
+        paddingHorizontal: 20,
+        marginTop: isSmallScreen ? 12 : 20,
+        paddingBottom: Math.max(insets.bottom + 12, 32)
+      }}>
         <Pressable onPress={() => finish()} style={{ paddingVertical: 12, paddingHorizontal: 16 }}>
-          <Text style={{ color: 'white', fontWeight: '700' }}>{skipOrFinishLabel}</Text>
+          <Text style={{ color: 'white', fontWeight: '700', fontSize: isSmallScreen ? 14 : 16 }}>
+            {skipOrFinishLabel}
+          </Text>
         </Pressable>
 
         {/* Primary action: Next OR contextual CTA */}
@@ -487,7 +611,7 @@ export default function OnboardingScreen({ navigation }: any) {
               onPress={() => (SLIDES[index] as any).cta.onPress()}
               style={{ backgroundColor: 'white', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 999 }}
             >
-              <Text style={{ color: '#0ea5e9', fontWeight: '800' }}>
+              <Text style={{ color: '#0ea5e9', fontWeight: '800', fontSize: isSmallScreen ? 14 : 16 }}>
                 {(SLIDES[index] as any).cta.label}
               </Text>
             </Pressable>
@@ -496,7 +620,9 @@ export default function OnboardingScreen({ navigation }: any) {
               onPress={goNext}
               style={{ backgroundColor: 'white', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 999 }}
             >
-              <Text style={{ color: '#0ea5e9', fontWeight: '800' }}>Next</Text>
+              <Text style={{ color: '#0ea5e9', fontWeight: '800', fontSize: isSmallScreen ? 14 : 16 }}>
+                {t('onboarding.actions.next')}
+              </Text>
             </Pressable>
           )
         ) : (
@@ -504,7 +630,9 @@ export default function OnboardingScreen({ navigation }: any) {
             onPress={() => finish()}
             style={{ backgroundColor: 'white', paddingVertical: 12, paddingHorizontal: 20, borderRadius: 999 }}
           >
-            <Text style={{ color: '#0ea5e9', fontWeight: '800' }}>Start using GiftCircles</Text>
+            <Text style={{ color: '#0ea5e9', fontWeight: '800', fontSize: isSmallScreen ? 13 : 16 }}>
+              {t('onboarding.actions.startUsing')}
+            </Text>
           </Pressable>
         )}
       </View>

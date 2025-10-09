@@ -1,15 +1,15 @@
 // src/screens/EventListScreen.tsx
-import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { View, Text, FlatList, Pressable, ActivityIndicator, RefreshControl, Alert } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { LinearGradient } from 'expo-linear-gradient';
 import { supabase } from '../lib/supabase';
 import { Event } from '../types';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import EventCard from '../components/EventCard';
 import { toast } from '../lib/toast';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
+import { PendingInvitesCard } from '../components/PendingInvitesCard';
 
 type MemberRow = { event_id: string; user_id: string };
 
@@ -43,7 +43,7 @@ export default function EventListScreen({ navigation }: any) {
   const { t } = useTranslation();
   const HIT = { top: 12, bottom: 12, left: 12, right: 12 };
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const firstLoad = !initialized;
     const wasRefreshing = !!refreshing;
 
@@ -60,7 +60,10 @@ export default function EventListScreen({ navigation }: any) {
     try {
       const { data: { session }, error: sessErr } = await supabase.auth.getSession();
       if (sessErr) throw sessErr;
-      if (!session) return;
+      if (!session) {
+        stopIndicators();
+        return;
+      }
 
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
@@ -70,36 +73,32 @@ export default function EventListScreen({ navigation }: any) {
         const metaName = (user.user_metadata?.name ?? '').trim();
         const emailPrefix = (user.email?.split('@')[0] ?? 'there').trim();
 
-        setMeName(metaName || emailPrefix);
-
-        if (metaName) {
-          const { data: profMaybe } = await supabase
-            .from('profiles')
-            .select('display_name')
-            .eq('id', user.id)
-            .maybeSingle();
-
-          const needsUpdate =
-            !profMaybe?.display_name ||
-            profMaybe.display_name.trim() === '' ||
-            profMaybe.display_name.trim() === emailPrefix;
-
-          if (needsUpdate) {
-            await supabase.rpc('set_profile_name', { p_name: metaName }).catch(() => {});
-          }
-        }
-
+        // Fetch profile first
         const { data: prof } = await supabase
           .from('profiles')
           .select('display_name')
           .eq('id', user.id)
           .maybeSingle();
 
-        setMeName(
+        // If profile needs updating with metadata name
+        if (metaName) {
+          const needsUpdate =
+            !prof?.display_name ||
+            prof.display_name.trim() === '' ||
+            prof.display_name.trim() === emailPrefix;
+
+          if (needsUpdate) {
+            await supabase.rpc('set_profile_name', { p_name: metaName }).catch(() => { });
+          }
+        }
+
+        // Set name only once, using the final value
+        const finalName =
           (prof?.display_name ?? '').trim() ||
-          (user.user_metadata?.name ?? '').trim() ||
-          (user.email?.split('@')[0] ?? 'there').trim()
-        );
+          metaName ||
+          emailPrefix;
+
+        setMeName(finalName);
       }
 
       // ---- Pull events + counts from RPC ----
@@ -186,10 +185,10 @@ export default function EventListScreen({ navigation }: any) {
 
         const { data: unpurchasedClaims, error: upErr } = listIds.length
           ? await supabase
-              .from('claims')
-              .select('id,item_id,purchased,items!inner(list_id)')
-              .eq('purchased', false)
-              .in('items.list_id', listIds)
+            .from('claims')
+            .select('id,item_id,purchased,items!inner(list_id)')
+            .eq('purchased', false)
+            .in('items.list_id', listIds)
           : { data: [], error: null as any };
         if (upErr) throw upErr;
 
@@ -214,9 +213,9 @@ export default function EventListScreen({ navigation }: any) {
       clearTimeout(failsafe);
       stopIndicators();
     }
-  };
+  }, [initialized, refreshing, t]);
 
-  useFocusEffect(useCallback(() => { load(); }, []));
+  useFocusEffect(useCallback(() => { load(); }, [load]));
   useEffect(() => {
     const ch = supabase
       .channel('events-dashboard')
@@ -278,21 +277,93 @@ export default function EventListScreen({ navigation }: any) {
     );
   }
 
+  const onPressJoin = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        navigation.navigate('Profile');
+        return;
+      }
+
+      // Use can_join_event RPC to check limit (bypasses RLS with SECURITY DEFINER)
+      const { data: canJoin, error: checkError } = await supabase.rpc('can_join_event', {
+        p_user: user.id
+      });
+
+      if (checkError) {
+        console.log('[Events] can_join_event RPC error:', checkError);
+        // Show error but don't allow navigation - server-side check failed
+        Alert.alert(
+          t('errors.generic.title', 'Something went wrong'),
+          t('errors.generic.message', 'An unexpected error occurred. Please try again.')
+        );
+        return;
+      }
+
+      // Block if user has reached free tier limit
+      if (canJoin === false) {
+        console.log('[Events] Free tier limit reached - blocking join');
+        Alert.alert(
+          t('errors.limits.freeLimitTitle', 'Upgrade required'),
+          t('errors.limits.joinLimitMessage', 'You can only be a member of 3 events on the free plan. Upgrade to join more events or leave an existing event first.')
+        );
+        return;
+      }
+
+      console.log('[Events] Can join event - navigating to JoinEvent screen');
+      navigation.navigate('JoinEvent');
+    } catch (err) {
+      console.log('[Events] onPressJoin error:', err);
+      // Show error instead of navigating
+      Alert.alert(
+        t('errors.generic.title', 'Something went wrong'),
+        t('errors.generic.message', 'An unexpected error occurred. Please try again.')
+      );
+    }
+  };
+
   const onPressCreate = async () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { navigation.navigate('Profile'); return; }
-
-      const { data: allowed, error } = await supabase.rpc('can_create_event', { p_user: user.id });
-      if (error) console.log('[Events] can_create_event error', error);
-
-      if (allowed === false) {
-        Alert.alert('Upgrade required', 'You can create up to 3 events on Free.');
+      if (!user) {
+        navigation.navigate('Profile');
         return;
       }
+
+      // Use can_create_event RPC to check limit (bypasses RLS with SECURITY DEFINER)
+      const { data: canCreate, error: checkError } = await supabase.rpc('can_create_event', {
+        p_user: user.id
+      });
+
+      if (checkError) {
+        console.log('[Events] can_create_event RPC error:', checkError);
+        // Show error but don't allow navigation - server-side check failed
+        Alert.alert(
+          t('errors.generic.title', 'Something went wrong'),
+          t('errors.generic.message', 'An unexpected error occurred. Please try again.')
+        );
+        return;
+      }
+
+      // Block if user has reached free tier limit
+      if (canCreate === false) {
+        console.log('[Events] Free tier limit reached - blocking creation');
+        Alert.alert(
+          t('errors.limits.freeLimitTitle', 'Upgrade required'),
+          t('errors.limits.freeLimitMessage', 'You can create up to 3 events on the free plan. Upgrade to create more.')
+        );
+        return;
+      }
+
+      console.log('[Events] Can create event - navigating to CreateEvent screen');
       navigation.navigate('CreateEvent');
-    } catch {
-      navigation.navigate('CreateEvent');
+    } catch (err) {
+      console.log('[Events] onPressCreate error:', err);
+      // Show error instead of navigating
+      Alert.alert(
+        t('errors.generic.title', 'Something went wrong'),
+        t('errors.generic.message', 'An unexpected error occurred. Please try again.')
+      );
     }
   };
 
@@ -327,10 +398,15 @@ export default function EventListScreen({ navigation }: any) {
           </View>
         </LinearGradient>
 
+        {/* Pending Invites Card */}
+        <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
+          <PendingInvitesCard onInviteAccepted={load} />
+        </View>
+
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('eventList.title')}</Text>
           <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            <Pressable hitSlop={HIT} onPress={() => navigation.navigate('JoinEvent')} style={{ marginRight: 16 }}>
+            <Pressable hitSlop={HIT} onPress={onPressJoin} style={{ marginRight: 16 }}>
               <Text style={{ color: '#2e95f1', fontWeight: '600' }}>{t('eventList.toolbar.join')}</Text>
             </Pressable>
             <Pressable hitSlop={HIT} onPress={onPressCreate} style={{ marginRight: 16 }}>
@@ -358,7 +434,10 @@ export default function EventListScreen({ navigation }: any) {
 
             const onPress = () => {
               if (!isAccessible) {
-                Alert.alert('Upgrade required', 'You can access up to 3 events on Free.');
+                Alert.alert(
+                  t('errors.limits.freeLimitTitle', 'Upgrade required'),
+                  t('errors.limits.eventAccessMessage', 'You can access up to 3 events on the free plan. This event is locked. Upgrade to access all your events.')
+                );
                 return;
               }
               navigation.navigate('EventDetail', { id: item.id });

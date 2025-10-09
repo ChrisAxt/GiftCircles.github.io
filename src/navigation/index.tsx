@@ -1,7 +1,7 @@
 // src/navigation/index.tsx
-import React, { useEffect, useState } from 'react';
-import { ActivityIndicator, View, Platform, StatusBar as RNStatusBar } from 'react-native';
-import { NavigationContainer, DefaultTheme, DarkTheme, Theme  } from '@react-navigation/native';
+import React, { useEffect, useState, useRef } from 'react';
+import { ActivityIndicator, View, Platform } from 'react-native';
+import { NavigationContainer, DefaultTheme, DarkTheme, Theme, NavigationContainerRef  } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createMaterialTopTabNavigator } from '@react-navigation/material-top-tabs';
 import { Session } from '@supabase/supabase-js';
@@ -9,6 +9,7 @@ import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import Constants from 'expo-constants';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { configureNotificationHandler, setupNotificationResponseListener } from '../lib/notifications';
 
 // import { StatusBar } from 'expo-status-bar';
 
@@ -24,11 +25,13 @@ import JoinEventScreen from '../screens/JoinEventScreen';
 import ListDetailScreen from '../screens/ListDetailScreen';
 import AddItemScreen from '../screens/AddItemScreen';
 import CreateListScreen from '../screens/CreateListScreen';
+import EditListScreen from '../screens/EditListScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditEventScreen from '../screens/EditEventScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
 import AllListsScreen from '../screens/AllListsScreen';
 import MyClaimsScreen from '../screens/MyClaimsScreen';
+import EditItemScreen from '../screens/EditItemScreen';
 import FancyTabBar from '../components/FancyTabBar';
 
 const Stack = createNativeStackNavigator();
@@ -71,15 +74,24 @@ function InnerNavigator() {
   const theme = colorScheme === 'dark' ? CustomDarkTheme : DefaultTheme;
   const inExpoGo = Constants.appOwnership === 'expo';
   const isAndroid = Platform.OS === 'android';
+  const navigationRef = useRef<NavigationContainerRef<any>>(null);
 
-  // Ensure system status-bar matches theme even before stack mounts
+  // Configure notification handler (how they appear when app is foregrounded)
   useEffect(() => {
-    RNStatusBar.setBarStyle(colorScheme === 'dark' ? 'light-content' : 'dark-content');
-    if (Platform.OS === 'android') {
-      RNStatusBar.setBackgroundColor('transparent');
-      RNStatusBar.setTranslucent(true);
-    }
-  }, [colorScheme]);
+    console.log('[Navigation] Configuring notification handler');
+    configureNotificationHandler();
+  }, []);
+
+  // Set up notification tap listener
+  useEffect(() => {
+    console.log('[Navigation] Setting up notification tap listener with navigationRef:', navigationRef);
+    const cleanup = setupNotificationResponseListener(navigationRef);
+    return () => {
+      console.log('[Navigation] Cleaning up notification listener');
+      cleanup();
+    };
+  }, []);
+
 
   const [session, setSession] = useState<Session | null>(null);
   const [loadingSession, setLoadingSession] = useState(true);
@@ -144,7 +156,7 @@ function InnerNavigator() {
   const initialRoute = !session ? 'Auth' : (needsOnboarding ? 'Onboarding' : 'Home');
 
   return (
-    <NavigationContainer theme={theme}>
+    <NavigationContainer ref={navigationRef} theme={theme}>
       <Stack.Navigator
           initialRouteName={initialRoute}
           key={initialRoute}
@@ -171,6 +183,8 @@ function InnerNavigator() {
             <Stack.Screen name="ListDetail" component={ListDetailScreen} options={{ title: 'List', headerShown: false }} />
             <Stack.Screen name="AddItem" component={AddItemScreen} options={{ title: 'Add Item', headerShown: false }} />
             <Stack.Screen name="CreateList" component={CreateListScreen} options={{ title: 'Create List', headerShown: false }} />
+            <Stack.Screen name="EditList" component={EditListScreen} options={{ title: 'Edit List', headerShown: false }} />
+            <Stack.Screen name="EditItem" component={EditItemScreen} options={{ title: 'Edit Item', headerShown: false }} />
           </>
         )}
       </Stack.Navigator>

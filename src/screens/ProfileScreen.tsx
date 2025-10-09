@@ -8,7 +8,6 @@ import { LabeledInput } from '../components/LabeledInput';
 import PreferencesCard from '../components/PreferencesCard';
 import { useTranslation } from 'react-i18next';
 import { Screen } from '../components/Screen';
-import { TabBarSpacer } from '../components/TabBarSpacer';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 export default function ProfileScreen({ navigation }: any) {
@@ -85,7 +84,7 @@ export default function ProfileScreen({ navigation }: any) {
         return;
       }
       console.log('[Profile] load error', e);
-      toast.error('Load failed', { text2: e?.message ?? String(e) });
+      toast.error(t('profile.alerts.loadFailedTitle', 'Load failed'), { text2: e?.message ?? String(e) });
     } finally {
       clearTimeout(failsafe);
       stopIndicators();
@@ -96,8 +95,7 @@ export default function ProfileScreen({ navigation }: any) {
 
   const saveName = async () => {
     if (!displayName.trim()) {
-      toast.error(t('profile.alerts.nameRequiredTitle'),
-        t('profile.alerts.nameRequiredBody'));
+      toast.error(t('profile.alerts.nameRequiredTitle'), { text2: t('profile.alerts.nameRequiredBody') });
       return;
     }
     setSaving(true);
@@ -113,12 +111,11 @@ export default function ProfileScreen({ navigation }: any) {
           .eq('id', userId);
         if (error) throw error;
       }
-      toast.success(t('profile.alerts.saveOkTitle'),
-                    t('profile.alerts.saveOkBody'));
+      toast.success(t('profile.alerts.saveOkTitle'), { text2: t('profile.alerts.saveOkBody') });
       await load();
     } catch (e: any) {
       console.log('[Profile] saveName error', e);
-      toast.error(t('profile.alerts.saveErrTitle'), e?.message ?? String(e));
+      toast.error(t('profile.alerts.saveErrTitle'), { text2: e?.message ?? String(e) });
     } finally {
       setSaving(false);
     }
@@ -131,7 +128,7 @@ export default function ProfileScreen({ navigation }: any) {
         navigation.reset({ index: 0, routes: [{ name: 'Auth' }] });
       }
     } catch (e: any) {
-      toast.error(t('profile.alerts.signOutErrTitle'), e?.message ?? String(e));
+      toast.error(t('profile.alerts.signOutErrTitle'), { text2: e?.message ?? String(e) });
     }
   };
   const handleSignOut = async () => {
@@ -158,7 +155,7 @@ export default function ProfileScreen({ navigation }: any) {
       if (error || !data?.ok) {
         const ctx: any = (error as any)?.context;
         let msg = (data && data.error) || (error && (error as any).message) || 'Delete failed';
-        if (ctx && typeof ctx.text === 'function') { try { msg = (await ctx.text()) || msg; } catch {} }
+        if (ctx && typeof ctx.text === 'function') { try { msg = (await ctx.text()) || msg; } catch { } }
         Alert.alert(t('profile.alerts.deleteErrTitle'), msg);
         return;
       }
