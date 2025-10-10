@@ -36,7 +36,14 @@ const en = {
         deleteOkTitle: 'Account deleted',
         deleteOkBody: 'Your account has been removed.',
       },
-      settings: { title: 'Settings', appearance: 'Appearance', language: 'Language', push: 'Push notifications' },
+      settings: {
+        title: 'Settings',
+        appearance: 'Appearance',
+        language: 'Language',
+        currency: 'Currency',
+        currencyUpdated: 'Currency preference updated',
+        push: 'Push notifications'
+      },
       common: { system: 'System', light: 'Light', dark: 'Dark', english: 'English', swedish: 'Swedish' },
     },
     navigation: {
@@ -129,18 +136,25 @@ const en = {
         emptyBody: 'Create one to get started.',
       },
       invite: {
-        title: 'Invite options',
+        title: 'Invite to {{title}}',
+        subtitle: 'Enter the email address of the person you\'d like to invite',
         emailLabel: 'Send email',
-        emailPlaceholder: 'name@example.com',
+        emailPlaceholder: 'email@example.com',
         cancel: 'Cancel',
-        sendEmail: 'Send email',
+        sendInvite: 'Send Invite',
         sending: 'Sending…',
-        sendCode: 'Send code',
+        shareCode: 'Share Code',
+        or: 'OR',
         sentTitle: 'Invite sent',
-        sentBody: 'We’ve emailed your invite.',
-        missingEmailTitle: 'Missing email',
-        missingEmailBody: 'Please enter an email address.',
-        sendFailedTitle: 'Send failed',
+        sentBody: 'Invitation sent to {{email}}',
+        missingEmailTitle: 'Error',
+        missingEmailBody: 'Please enter an email address',
+        invalidEmailTitle: 'Error',
+        invalidEmailBody: 'Please enter a valid email address',
+        sendFailedTitle: 'Error',
+        sendFailedBody: 'Failed to send invite',
+        shareMessage: 'Join my event "{{title}}" on GiftCircles!\n\nUse code: {{code}}',
+        shareTitle: 'Join {{title}}',
       },
       share: {
         joinWithCode: 'Join my event "{{title}}": code {{code}}',
@@ -170,13 +184,14 @@ const en = {
     },
     editEvent: {
       title: 'Edit Event',
+      screenTitle: 'Edit Event',
       labels: {
         title: 'Title',
         date: 'Date',
         joinCode: 'Join code',
       },
       placeholders: {
-        title: 'e.g. Bob’s Birthday',
+        title: 'e.g. Bob\'s Birthday',
         date: 'YYYY-MM-DD',
         selectDate: 'Select a date',
       },
@@ -202,11 +217,12 @@ const en = {
         updated: 'Event updated',
         saveFailed: 'Save failed',
         failedToLoad: 'Failed to load event.',
-        notFound: 'Event not found or you don’t have access.',
+        notFound: 'Event not found or you don\'t have access.',
       },
     },
     createList: {
       title: 'Create a list',
+      screenTitle: 'Create List',
       labels: {
         listName: 'List name',
       },
@@ -224,7 +240,13 @@ const en = {
         },
         exclusions: {
           title: 'Who to exclude',
-          help: 'People you pick here won’t see this list (even if they’re recipients).',
+          help: 'People you pick here won\'t see this list (even if they\'re recipients).',
+        },
+        emailRecipients: {
+          title: 'Invite by Email',
+          help: 'Add recipients who aren\'t in the event yet. They\'ll be invited automatically.',
+          placeholder: 'email@example.com',
+          addButton: 'Add',
         },
       },
       visibility: {
@@ -249,16 +271,22 @@ const en = {
           title: 'Create failed',
           noId: 'No list id returned.',
         },
-        notMember: 'You’re not a member of this event.',
+        notMember: 'You\'re not a member of this event.',
         created: {
           title: 'List created',
           body: 'Your list was created successfully.',
         },
+        invalidEmailTitle: 'Invalid Email',
+        invalidEmailBody: 'Please enter a valid email address',
+        duplicateEmailTitle: 'Already Added',
+        duplicateEmailBody: 'This email is already in the list',
+        inviteFailedTitle: 'Failed to invite {{email}}',
       },
       user: 'User {{id}}',
     },
     addItem: {
       title: 'Add item',
+      screenTitle: 'Add Item',
       labels: {
         name: 'Item name',
         urlOpt: 'URL (optional)',
@@ -288,11 +316,26 @@ const en = {
         generic: 'Error',
       },
     },
+    editItem: {
+      title: 'Edit Item',
+      screenTitle: 'Edit Item',
+      heading: 'Edit item details',
+      save: 'Save Changes',
+      saving: 'Saving…',
+    },
     listDetail: {
       title: 'List',
+      screenTitle: 'List',
       actions: {
         addItem: 'Add item',
         delete: 'Delete',
+      },
+      success: {
+        itemDeleted: 'Item deleted',
+        listDeleted: 'List deleted',
+      },
+      toasts: {
+        itemUpdated: 'Item updated',
       },
       empty: 'No items yet.',
       summary: {
@@ -344,8 +387,9 @@ const en = {
       fallbackEvent: 'Event',
     },
     createEvent: {
+      screenTitle: 'Create Event',
       titleLabel: 'Title',
-      titlePlaceholder: 'e.g. Bob’s Birthday',
+      titlePlaceholder: 'e.g. Bob\'s Birthday',
       descriptionLabel: 'Description (optional)',
       descriptionPlaceholder: 'e.g. Venue, theme, notes…',
       dateLabel: 'Event date (optional)',
@@ -361,6 +405,7 @@ const en = {
       toastCreateFailed: 'Create failed',
     },
     joinEvent: {
+      screenTitle: 'Join Event',
       heading: 'Join an event',
       codeLabel: 'Enter join code',
       codePlaceholder: 'e.g. 7G4K-MQ',

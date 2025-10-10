@@ -599,6 +599,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
           visible={inviteOpen}
           eventId={id}
           eventTitle={event?.title || ''}
+          joinCode={event?.join_code || ''}
           onClose={closeInvitePopup}
           onInviteSent={() => {
             load(); // Reload to show updated data

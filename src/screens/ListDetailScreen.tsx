@@ -9,6 +9,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { Screen } from '../components/Screen';
 import TopBar from '../components/TopBar';
+import { formatPrice } from '../lib/currency';
+import { useUserCurrency } from '../hooks/useUserCurrency';
 
 type Item = {
   id: string;
@@ -27,6 +29,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
   const { id } = route.params as { id: string };
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const currency = useUserCurrency();
 
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -247,15 +250,11 @@ export default function ListDetailScreen({ route, navigation }: any) {
         } else {
           toast.error(t('listDetail.errors.deleteFailed'), msg);
         }
-
-        // Fallback to expose RLS issues
-        const { error: directErr } = await supabase.from('items').delete().eq('id', item.id);
-        if (directErr) toast.error(t('listDetail.errors.directDeleteBlocked'), directErr.message ?? String(directErr));
         await load();
         return;
       }
 
-      toast.success(t('listDetail.actions.delete'));
+      toast.success(t('listDetail.success.itemDeleted'));
       await load();
     } catch (e: any) {
       toast.error(t('listDetail.errors.deleteFailed'), e?.message ?? String(e));
@@ -285,7 +284,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
         if (msg.includes('not_authenticated')) return toast.error(t('listDetail.errors.generic'), { text2: 'Please sign in and try again.' });
         return toast.error(t('listDetail.errors.deleteFailed'), { text2: msg });
       }
-      toast.success(t('listDetail.actions.delete'));
+      toast.success(t('listDetail.success.listDeleted'));
       navigation.goBack();
     } catch (e: any) {
       toast.error(t('listDetail.errors.deleteFailed'), { text2: e?.message ?? String(e) });
@@ -430,7 +429,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
                   </Pressable>
                 ) : null}
                 {typeof item.price === 'number' ? (
-                  <Text style={{ marginTop: 2, color: colors.text }}>${Number(item.price).toFixed(2)}</Text>
+                  <Text style={{ marginTop: 2, color: colors.text }}>{formatPrice(item.price, currency)}</Text>
                 ) : null}
                 {item.notes ? (
                   <Text style={{ marginTop: 4, color: colors.text, opacity: 0.8, fontStyle: 'italic' }}>{item.notes}</Text>

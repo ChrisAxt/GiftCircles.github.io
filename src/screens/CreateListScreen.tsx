@@ -35,6 +35,7 @@ export default function CreateListScreen({ route, navigation }: any) {
   const [otherRecipientName, setOtherRecipientName] = useState('');
   const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const toggleRecipient = (uid: string) => setRecipientIds(prev => ({ ...prev, [uid]: !prev[uid] }));
   const toggleViewer = (uid: string) => setViewerIds(prev => ({ ...prev, [uid]: !prev[uid] }));
@@ -45,6 +46,12 @@ export default function CreateListScreen({ route, navigation }: any) {
     (async () => {
       setLoading(true);
       try {
+        // Get current user
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user && !cancelled) {
+          setCurrentUserId(user.id);
+        }
+
         const { data: ms, error: mErr } = await supabase
           .from('event_members')
           .select('event_id,user_id,role')
@@ -173,7 +180,7 @@ export default function CreateListScreen({ route, navigation }: any) {
           });
           if (emailErr) {
             console.log('[CreateList] Error adding email recipient:', email, emailErr);
-            toast.error('Failed to invite ' + email, { text2: emailErr.message });
+            toast.error(t('createList.toasts.inviteFailedTitle', { email }), { text2: emailErr.message });
           } else {
             console.log('[CreateList] Successfully added email recipient:', email);
           }
@@ -299,10 +306,10 @@ export default function CreateListScreen({ route, navigation }: any) {
             {/* Email recipients section */}
             <View style={{ marginTop: 12 }}>
               <Text style={{ fontWeight: '700', color: colors.text, marginBottom: 4 }}>
-                Invite by Email
+                {t('createList.sections.emailRecipients.title')}
               </Text>
               <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
-                Add recipients who aren't in the event yet. They'll be invited automatically.
+                {t('createList.sections.emailRecipients.help')}
               </Text>
 
               {/* Email chips */}
@@ -349,7 +356,7 @@ export default function CreateListScreen({ route, navigation }: any) {
                       color: colors.text,
                       backgroundColor: colors.card,
                     }}
-                    placeholder="email@example.com"
+                    placeholder={t('createList.sections.emailRecipients.placeholder')}
                     placeholderTextColor={colors.text + '80'}
                     value={emailInput}
                     onChangeText={setEmailInput}
@@ -365,13 +372,13 @@ export default function CreateListScreen({ route, navigation }: any) {
 
                     // Basic email validation
                     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                      toast.error('Invalid Email', { text2: 'Please enter a valid email address' });
+                      toast.error(t('createList.toasts.invalidEmailTitle'), { text2: t('createList.toasts.invalidEmailBody') });
                       return;
                     }
 
                     // Check for duplicates
                     if (recipientEmails.includes(email)) {
-                      toast.info('Already Added', { text2: 'This email is already in the list' });
+                      toast.info(t('createList.toasts.duplicateEmailTitle'), { text2: t('createList.toasts.duplicateEmailBody') });
                       return;
                     }
 
@@ -386,7 +393,9 @@ export default function CreateListScreen({ route, navigation }: any) {
                     justifyContent: 'center',
                   }}
                 >
-                  <Text style={{ color: 'white', fontWeight: '700' }}>Add</Text>
+                  <Text style={{ color: 'white', fontWeight: '700' }}>
+                    {t('createList.sections.emailRecipients.addButton')}
+                  </Text>
                 </Pressable>
               </View>
             </View>
@@ -446,7 +455,9 @@ export default function CreateListScreen({ route, navigation }: any) {
                 </Text>
 
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-                  {membersWithNames.map(m => {
+                  {membersWithNames
+                    .filter(m => m.user_id !== currentUserId)
+                    .map(m => {
                     const excluded = !!viewerIds[m.user_id]; // reusing viewerIds as "excluded" set
                     return (
                       <Pressable

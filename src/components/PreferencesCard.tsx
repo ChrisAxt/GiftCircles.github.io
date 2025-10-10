@@ -11,6 +11,7 @@ import { toast } from '../lib/toast';
 import { useSettings } from '../theme/SettingsProvider';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@react-navigation/native';
+import { getAllCurrencies, CURRENCIES, detectUserCurrency, type Currency } from '../lib/currency';
 
 const inExpoGo = Constants.appOwnership === 'expo';
 
@@ -22,14 +23,18 @@ export default function PreferencesCard() {
   const [langOpen, setLangOpen] = useState(false);
   const [reminderDays, setReminderDays] = useState<number | null>(null);
   const [loadingReminder, setLoadingReminder] = useState(false);
+  const [currencyCode, setCurrencyCode] = useState<string>('USD');
+  const [currencyOpen, setCurrencyOpen] = useState(false);
+  const [loadingCurrency, setLoadingCurrency] = useState(false);
   const { t, i18n } = useTranslation();
 
-  // Load cached push state and reminder preference
+  // Load cached push state, reminder preference, and currency
   React.useEffect(() => {
     (async () => {
       const pushValue = await AsyncStorage.getItem('pref.pushEnabled');
       setPushEnabled(pushValue === '1');
       await loadReminderDays();
+      await loadCurrency();
     })();
   }, []);
 
@@ -49,6 +54,30 @@ export default function PreferencesCard() {
       }
     } catch (e) {
       console.error('Failed to load reminder days:', e);
+    }
+  };
+
+  const loadCurrency = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('currency')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (data?.currency) {
+        setCurrencyCode(data.currency);
+      } else {
+        // Auto-detect and save currency on first load
+        const detected = detectUserCurrency();
+        setCurrencyCode(detected);
+        await updateCurrency(detected);
+      }
+    } catch (e) {
+      console.error('Failed to load currency:', e);
     }
   };
   const setPushLocal = async (b: boolean) => {
@@ -180,6 +209,31 @@ export default function PreferencesCard() {
       toast.error('Update failed', e?.message ?? String(e));
     } finally {
       setLoadingReminder(false);
+    }
+  };
+
+  const updateCurrency = async (code: string) => {
+    if (loadingCurrency) return;
+    setLoadingCurrency(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ currency: code })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setCurrencyCode(code);
+      setCurrencyOpen(false);
+      toast.success(t('profile.settings.currencyUpdated', 'Currency preference updated'));
+    } catch (e: any) {
+      console.error('Failed to update currency:', e);
+      toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setLoadingCurrency(false);
     }
   };
 
@@ -317,6 +371,67 @@ export default function PreferencesCard() {
           </Pressable>
         </Modal>
       </View>
+
+      {/* Currency — modal dropdown */}
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ fontWeight: '600', marginBottom: 6, color: colors.text }}>
+          {t('profile.settings.currency', 'Currency')}
+        </Text>
+
+        {/* Field-like button */}
+        <Pressable
+          onPress={() => setCurrencyOpen(true)}
+          style={{
+            borderWidth: 1,
+            borderColor: colors.border,
+            borderRadius: 10,
+            paddingVertical: 12,
+            paddingHorizontal: 12,
+            backgroundColor: colors.card,
+          }}
+        >
+          <Text style={{ fontWeight: '700', color: colors.text }}>
+            {CURRENCIES[currencyCode]?.symbol} {CURRENCIES[currencyCode]?.name}
+          </Text>
+        </Pressable>
+
+        {/* Modal selector */}
+        <Modal visible={currencyOpen} transparent animationType="fade" onRequestClose={() => setCurrencyOpen(false)}>
+          <Pressable
+            onPress={() => setCurrencyOpen(false)}
+            style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'center', padding: 20 }}
+          >
+            <Pressable
+              onPress={() => {}}
+              style={{ backgroundColor: colors.card, borderRadius: 12, maxHeight: '70%', overflow: 'hidden', borderWidth: 1, borderColor: colors.border }}
+            >
+              <View style={{ padding: 14, borderBottomWidth: 1, borderColor: colors.border }}>
+                <Text style={{ fontSize: 16, fontWeight: '800', color: colors.text }}>
+                  {t('profile.settings.currency', 'Currency')}
+                </Text>
+              </View>
+
+              <ScrollView>
+                {getAllCurrencies().map((currency) => (
+                  <CurrencyRow
+                    key={currency.code}
+                    currency={currency}
+                    selected={currencyCode === currency.code}
+                    onPress={() => updateCurrency(currency.code)}
+                  />
+                ))}
+              </ScrollView>
+
+              <Pressable
+                onPress={() => setCurrencyOpen(false)}
+                style={{ padding: 14, alignItems: 'center', borderTopWidth: 1, borderColor: colors.border }}
+              >
+                <Text style={{ fontWeight: '700', color: '#2e95f1' }}>OK</Text>
+              </Pressable>
+            </Pressable>
+          </Pressable>
+        </Modal>
+      </View>
     </View>
   );
 }
@@ -337,6 +452,34 @@ function LangRow({ label, selected, onPress }: { label: string; selected: boolea
       }}
     >
       <Text style={{ fontSize: 15, color: colors.text }}>{label}</Text>
+      {selected ? <Text style={{ fontWeight: '800', color: '#2e95f1' }}>✓</Text> : null}
+    </Pressable>
+  );
+}
+
+function CurrencyRow({ currency, selected, onPress }: { currency: Currency; selected: boolean; onPress: () => void }) {
+  const { colors } = useTheme();
+  return (
+    <Pressable
+      onPress={onPress}
+      style={{
+        paddingVertical: 12,
+        paddingHorizontal: 16,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        borderBottomWidth: 1,
+        borderColor: colors.border,
+      }}
+    >
+      <View>
+        <Text style={{ fontSize: 15, color: colors.text, fontWeight: '600' }}>
+          {currency.symbol} {currency.name}
+        </Text>
+        <Text style={{ fontSize: 12, color: colors.text, opacity: 0.6 }}>
+          {currency.code}
+        </Text>
+      </View>
       {selected ? <Text style={{ fontWeight: '800', color: '#2e95f1' }}>✓</Text> : null}
     </Pressable>
   );

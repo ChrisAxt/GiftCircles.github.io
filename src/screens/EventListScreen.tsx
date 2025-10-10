@@ -39,6 +39,7 @@ export default function EventListScreen({ navigation }: any) {
   const [loading, setLoading] = useState(true);
   const [initialized, setInitialized] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
   const insets = useSafeAreaInsets();
   const { t } = useTranslation();
   const HIT = { top: 12, bottom: 12, left: 12, right: 12 };
@@ -212,6 +213,8 @@ export default function EventListScreen({ navigation }: any) {
     } finally {
       clearTimeout(failsafe);
       stopIndicators();
+      // Trigger invites refresh whenever we load events
+      setRefreshTrigger(prev => prev + 1);
     }
   }, [initialized, refreshing, t]);
 
@@ -400,7 +403,7 @@ export default function EventListScreen({ navigation }: any) {
 
         {/* Pending Invites Card */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
-          <PendingInvitesCard onInviteAccepted={load} />
+          <PendingInvitesCard onInviteAccepted={load} refreshTrigger={refreshTrigger} />
         </View>
 
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>

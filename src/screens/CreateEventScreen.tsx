@@ -167,9 +167,19 @@ export default function CreateEventScreen({ navigation }: any) {
         {showPicker && (
           <>
             {Platform.OS === 'ios' && (
-              <View style={{ alignItems: 'flex-end', marginBottom: 8 }}>
-                <Pressable onPress={() => setShowPicker(false)}>
-                  <Text style={{ color: '#2e95f1', fontWeight: '600' }}>{t('createEvent.done')}</Text>
+              <View style={{ marginBottom: 12 }}>
+                <Pressable
+                  onPress={() => setShowPicker(false)}
+                  style={{
+                    backgroundColor: '#2e95f1',
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 10,
+                    alignItems: 'center',
+                  }}
+                  hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+                >
+                  <Text style={{ color: '#fff', fontWeight: '700' }}>{t('createEvent.done')}</Text>
                 </Pressable>
               </View>
             )}

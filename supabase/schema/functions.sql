@@ -847,27 +847,24 @@ excluded as (
 )
 select
   exists(select 1 from l)
+  and not (select x from excluded) -- Must NOT be excluded (applies to everyone including creator)
   and (
-    -- Creator always sees
+    -- Creator sees (if not excluded)
     exists(select 1 from l where created_by = $2)
-    or (
-      not (select x from excluded) -- everyone else must NOT be excluded
-      and (
-        -- Recipient of this list
-        exists(select 1 from public.list_recipients lr
-               where lr.list_id = $1 and lr.user_id = $2)
-        or
-        -- Event-wide → any event member
-        exists(select 1 from l where visibility = 'event'
-               and exists (select 1 from public.event_members em
-                           where em.event_id = l.event_id and em.user_id = $2))
-        or
-        -- Selected → explicit viewer
-        exists(select 1 from l where visibility = 'selected'
-               and exists (select 1 from public.list_viewers v
-                           where v.list_id = $1 and v.user_id = $2))
-      )
-    )
+    or
+    -- Recipient of this list
+    exists(select 1 from public.list_recipients lr
+           where lr.list_id = $1 and lr.user_id = $2)
+    or
+    -- Event-wide → any event member
+    exists(select 1 from l where visibility = 'event'
+           and exists (select 1 from public.event_members em
+                       where em.event_id = l.event_id and em.user_id = $2))
+    or
+    -- Selected → explicit viewer
+    exists(select 1 from l where visibility = 'selected'
+           and exists (select 1 from public.list_viewers v
+                       where v.list_id = $1 and v.user_id = $2))
   );
 $function$
 "
@@ -1062,9 +1059,10 @@ begin
   v_is_list_owner := (v_row.list_creator = v_uid);
   v_is_admin := exists(
     select 1 from public.event_members em
+    join public.events e on e.id = em.event_id
     where em.event_id = v_row.event_id
       and em.user_id  = v_uid
-      and em.role in ('admin','owner')
+      and (em.role = 'admin' or e.owner_id = v_uid)
   );
 
   select exists(select 1 from public.claims c where c.item_id = p_item_id) into v_has_claims;
@@ -1106,15 +1104,18 @@ begin
     raise exception 'not_found';
   end if;
 
-  -- Only the creator may delete (default)
+  -- Allow creator, event admin, or event owner to delete
   if v_owner <> v_user then
-    -- Optional: allow event admins to delete too. Uncomment to enable.
-    -- if not exists (
-    --   select 1 from public.event_members em
-    --   where em.event_id = v_event and em.user_id = v_user and em.role = 'admin'
-    -- ) then
+    -- Check if user is event admin or event owner
+    if not exists (
+      select 1 from public.event_members em
+      join public.events e on e.id = em.event_id
+      where em.event_id = v_event
+        and em.user_id = v_user
+        and (em.role = 'admin' or e.owner_id = v_user)
+    ) then
       raise exception 'not_authorized';
-    -- end if;
+    end if;
   end if;
 
   delete from public.lists where id = p_list_id;
@@ -1252,7 +1253,7 @@ AS $function$
       (select count(*) from event_members em2 where em2.event_id = e.id) as member_count,
       coalesce(ct.total_items, 0) as total_items,
       coalesce(cl.claimed_count, 0) as claimed_count,
-      row_number() over (order by e.created_at desc nulls last, e.id) as rownum
+      row_number() over (order by e.created_at asc nulls last, e.id) as rownum
     from my_events e
     left join counts ct on ct.event_id = e.id
     left join claims cl on cl.event_id = e.id

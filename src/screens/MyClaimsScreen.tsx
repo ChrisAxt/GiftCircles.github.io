@@ -1,9 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, FlatList, Pressable, ActivityIndicator, Alert, RefreshControl } from 'react-native';
+import { View, Text, FlatList, Pressable, ActivityIndicator, Alert, RefreshControl, Linking } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { useTranslation } from 'react-i18next';
 import { Screen } from '../components/Screen';
+import { formatPrice } from '../lib/currency';
+import { useUserCurrency } from '../hooks/useUserCurrency';
 
 type ClaimRow = {
   id: string;
@@ -13,6 +15,8 @@ type ClaimRow = {
   item?: {
     id: string;
     name: string | null;
+    url?: string | null;
+    price?: number | null;
     list_id: string;
     list?: {
       id: string;
@@ -32,6 +36,8 @@ type ClaimCard = {
   itemId: string;
   purchased: boolean;
   itemName: string;
+  itemUrl?: string | null;
+  itemPrice?: number | null;
   listName: string;
   eventTitle: string;
 };
@@ -39,6 +45,7 @@ type ClaimCard = {
 export default function MyClaimsScreen({ navigation }: any) {
   const { t } = useTranslation();
   const { colors } = useTheme();
+  const currency = useUserCurrency();
 
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -76,7 +83,7 @@ export default function MyClaimsScreen({ navigation }: any) {
         .select(`
           id, item_id, purchased, created_at,
           item:items (
-            id, name, list_id,
+            id, name, url, price, list_id,
             list:lists (
               id, name, event_id,
               event:events ( id, title, event_date )
@@ -117,6 +124,8 @@ export default function MyClaimsScreen({ navigation }: any) {
         itemId: c.item_id,
         purchased: !!c.purchased,
         itemName: (it?.name ?? t('myClaims.fallbackItem')),
+        itemUrl: it?.url,
+        itemPrice: it?.price,
         listName: (ls?.name ?? t('myClaims.fallbackList')),
         eventTitle: (ev?.title ?? t('myClaims.fallbackEvent')),
       };
@@ -185,6 +194,24 @@ export default function MyClaimsScreen({ navigation }: any) {
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                 <View style={{ flex: 1, paddingRight: 8 }}>
                   <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{item.itemName}</Text>
+                  {item.itemUrl ? (
+                    <Pressable
+                      onPress={(e) => {
+                        e.stopPropagation();
+                        Linking.openURL(item.itemUrl!);
+                      }}
+                      style={{ marginTop: 4, maxWidth: '90%' }}
+                    >
+                      <Text numberOfLines={1} style={{ color: '#2e95f1', textDecorationLine: 'underline' }}>
+                        {item.itemUrl}
+                      </Text>
+                    </Pressable>
+                  ) : null}
+                  {typeof item.itemPrice === 'number' ? (
+                    <Text style={{ marginTop: 2, color: colors.text }}>
+                      {formatPrice(item.itemPrice, currency)}
+                    </Text>
+                  ) : null}
                   <Text style={{ marginTop: 4, opacity: 0.75, color: colors.text }}>
                     {t('myClaims.line', { event: item.eventTitle, list: item.listName })}
                   </Text>

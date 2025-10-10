@@ -35,6 +35,13 @@ list_exclusions_insert,public,list_exclusions,null,"(EXISTS ( SELECT 1
 list_exclusions_select,public,list_exclusions,"((EXISTS ( SELECT 1
    FROM lists l
   WHERE ((l.id = list_exclusions.list_id) AND (l.created_by = auth.uid())))) OR (user_id = auth.uid()))",null,{authenticated},r
+list_exclusions_delete,public,list_exclusions,"((EXISTS ( SELECT 1
+   FROM lists l
+   JOIN events e ON e.id = l.event_id
+   JOIN event_members em ON em.event_id = e.id
+  WHERE l.id = list_exclusions.list_id
+    AND em.user_id = auth.uid()
+    AND (l.created_by = auth.uid() OR em.role = 'admin' OR e.owner_id = auth.uid()))) OR (user_id = auth.uid()))",null,{authenticated},d
 insert list_recipients by creator,public,list_recipients,null,"(EXISTS ( SELECT 1
    FROM lists l
   WHERE ((l.id = list_recipients.list_id) AND (l.created_by = auth.uid()))))",{-},a

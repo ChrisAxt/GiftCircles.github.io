@@ -10,6 +10,7 @@ import { supabase } from '../lib/supabase';
 import Constants from 'expo-constants';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureNotificationHandler, setupNotificationResponseListener } from '../lib/notifications';
+import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
 
 // import { StatusBar } from 'expo-status-bar';
 
@@ -72,9 +73,71 @@ function Tabs() {
 function InnerNavigator() {
   const { colorScheme } = useSettings();
   const theme = colorScheme === 'dark' ? CustomDarkTheme : DefaultTheme;
+  const isDark = colorScheme === 'dark';
   const inExpoGo = Constants.appOwnership === 'expo';
   const isAndroid = Platform.OS === 'android';
   const navigationRef = useRef<NavigationContainerRef<any>>(null);
+
+  // Toast config based on app theme
+  const toastConfig = {
+    success: (props: any) => (
+      <BaseToast
+        {...props}
+        style={{
+          borderLeftColor: '#10b981',
+          backgroundColor: isDark ? '#1f2937' : '#ffffff',
+        }}
+        contentContainerStyle={{ paddingHorizontal: 15 }}
+        text1Style={{
+          fontSize: 16,
+          fontWeight: '600',
+          color: isDark ? '#ffffff' : '#000000',
+        }}
+        text2Style={{
+          fontSize: 14,
+          color: isDark ? '#d1d5db' : '#6b7280',
+        }}
+      />
+    ),
+    error: (props: any) => (
+      <ErrorToast
+        {...props}
+        style={{
+          borderLeftColor: '#ef4444',
+          backgroundColor: isDark ? '#1f2937' : '#ffffff',
+        }}
+        contentContainerStyle={{ paddingHorizontal: 15 }}
+        text1Style={{
+          fontSize: 16,
+          fontWeight: '600',
+          color: isDark ? '#ffffff' : '#000000',
+        }}
+        text2Style={{
+          fontSize: 14,
+          color: isDark ? '#d1d5db' : '#6b7280',
+        }}
+      />
+    ),
+    info: (props: any) => (
+      <BaseToast
+        {...props}
+        style={{
+          borderLeftColor: '#3b82f6',
+          backgroundColor: isDark ? '#1f2937' : '#ffffff',
+        }}
+        contentContainerStyle={{ paddingHorizontal: 15 }}
+        text1Style={{
+          fontSize: 16,
+          fontWeight: '600',
+          color: isDark ? '#ffffff' : '#000000',
+        }}
+        text2Style={{
+          fontSize: 14,
+          color: isDark ? '#d1d5db' : '#6b7280',
+        }}
+      />
+    ),
+  };
 
   // Configure notification handler (how they appear when app is foregrounded)
   useEffect(() => {
@@ -156,6 +219,7 @@ function InnerNavigator() {
   const initialRoute = !session ? 'Auth' : (needsOnboarding ? 'Onboarding' : 'Home');
 
   return (
+    <>
     <NavigationContainer ref={navigationRef} theme={theme}>
       <Stack.Navigator
           initialRouteName={initialRoute}
@@ -189,6 +253,8 @@ function InnerNavigator() {
         )}
       </Stack.Navigator>
     </NavigationContainer>
+    <Toast config={toastConfig} />
+  </>
   );
 }
 

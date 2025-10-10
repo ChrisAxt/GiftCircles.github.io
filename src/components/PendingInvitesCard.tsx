@@ -7,9 +7,10 @@ import * as Notifications from 'expo-notifications';
 
 interface PendingInvitesCardProps {
   onInviteAccepted?: () => void;
+  refreshTrigger?: number; // Increment this to trigger a refresh
 }
 
-export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInviteAccepted }) => {
+export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInviteAccepted, refreshTrigger }) => {
   const { colors } = useTheme();
   const [invites, setInvites] = useState<PendingInvite[]>([]);
   const [loading, setLoading] = useState(false);
@@ -22,6 +23,14 @@ export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInvite
       loadInvites();
     }, [])
   );
+
+  // Reload when refreshTrigger changes (e.g., when parent pulls to refresh)
+  useEffect(() => {
+    if (refreshTrigger !== undefined) {
+      console.log('[PendingInvitesCard] Refresh triggered by parent');
+      loadInvites();
+    }
+  }, [refreshTrigger]);
 
   // Also reload when a notification is received (while app is open)
   useEffect(() => {
