@@ -15,10 +15,6 @@ const fromExtra = {
 const supabaseUrl = (fromEnv.url || fromExtra.url) as string;
 const supabaseAnonKey = (fromEnv.key || fromExtra.key) as string;
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.warn('Missing Supabase credentials: set EXPO_PUBLIC_SUPABASE_URL/ANON_KEY or expo.extra in app.json');
-}
-
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     storage: AsyncStorage as any,
@@ -26,5 +22,41 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
     persistSession: true,
     detectSessionInUrl: false,
   },
-  realtime: { params: { eventsPerSecond: 5 } },
+  realtime: {
+    params: {
+      eventsPerSecond: 5
+    }
+  },
+  global: {
+    headers: {
+      'X-Client-Info': 'giftcircles-mobile',
+    },
+    // Connection pooling and timeout configuration
+    // Note: Supabase handles connection pooling via PgBouncer automatically
+    // These settings control client-side behavior
+    fetch: (url: RequestInfo | URL, options: RequestInit = {}) => {
+      // Add timeout to all requests (30 seconds for queries, 60 for RPCs)
+      const urlString = typeof url === 'string' ? url : url.toString();
+      const isRPC = urlString.includes('/rpc/');
+      const timeout = isRPC ? 60000 : 30000;
+
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+
+      return fetch(url, {
+        ...options,
+        signal: controller.signal,
+      })
+        .finally(() => clearTimeout(timeoutId))
+        .catch((error) => {
+          if (error.name === 'AbortError') {
+            throw new Error(`Request timeout after ${timeout}ms`);
+          }
+          throw error;
+        });
+    },
+  },
+  db: {
+    schema: 'public',
+  },
 });

@@ -45,10 +45,7 @@
       "package": "com.giftcircles.app",
       "versionCode": 1,
       "googleServicesFile": "./google-services.json",
-      "adaptiveIcon": {
-        "foregroundImage": "./assets/icon.png",
-        "backgroundColor": "#21c36b"
-      },
+      "icon": "./assets/icon.png",
       "splash": {
         "image": "./assets/splash.png",
         "resizeMode": "contain",

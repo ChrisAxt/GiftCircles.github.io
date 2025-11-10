@@ -45,7 +45,7 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
         title: t('eventDetail.invite.shareTitle', { title: eventTitle }),
       });
     } catch (error) {
-      console.error('Error sharing:', error);
+      // Error sharing
     }
   };
 
@@ -79,7 +79,6 @@ export const InviteUserModal: React.FC<InviteUserModalProps> = ({
       onInviteSent?.();
       onClose();
     } catch (error: any) {
-      console.error('Error sending invite:', error);
       Alert.alert(
         t('eventDetail.invite.sendFailedTitle'),
         error.message || t('eventDetail.invite.sendFailedBody')

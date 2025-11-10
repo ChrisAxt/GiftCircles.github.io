@@ -19,7 +19,6 @@ export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInvite
   // Reload invites every time the screen comes into focus
   useFocusEffect(
     React.useCallback(() => {
-      console.log('[PendingInvitesCard] Screen focused, loading invites');
       loadInvites();
     }, [])
   );
@@ -27,51 +26,40 @@ export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInvite
   // Reload when refreshTrigger changes (e.g., when parent pulls to refresh)
   useEffect(() => {
     if (refreshTrigger !== undefined) {
-      console.log('[PendingInvitesCard] Refresh triggered by parent');
       loadInvites();
     }
   }, [refreshTrigger]);
 
   // Also reload when a notification is received (while app is open)
   useEffect(() => {
-    console.log('[PendingInvitesCard] Setting up notification listener');
     const subscription = Notifications.addNotificationReceivedListener((notification) => {
-      console.log('[PendingInvitesCard] Notification received, reloading invites');
       loadInvites();
     });
 
     return () => {
-      console.log('[PendingInvitesCard] Cleaning up notification listener');
       subscription.remove();
     };
   }, []);
 
   // Reload when app comes to foreground (after tapping notification from background)
   useEffect(() => {
-    console.log('[PendingInvitesCard] Setting up AppState listener');
     const subscription = AppState.addEventListener('change', (nextAppState: AppStateStatus) => {
-      console.log('[PendingInvitesCard] AppState changed to:', nextAppState);
       if (nextAppState === 'active') {
-        console.log('[PendingInvitesCard] App became active, loading invites');
         loadInvites();
       }
     });
 
     return () => {
-      console.log('[PendingInvitesCard] Cleaning up AppState listener');
       subscription.remove();
     };
   }, []);
 
   const loadInvites = async () => {
     try {
-      console.log('[PendingInvitesCard] Loading invites...');
       setLoading(true);
       const data = await getMyPendingInvites();
-      console.log('[PendingInvitesCard] Loaded invites:', data.length);
       setInvites(data);
     } catch (error) {
-      console.error('[PendingInvitesCard] Error loading invites:', error);
       Alert.alert('Error', 'Failed to load invites');
     } finally {
       setLoading(false);
@@ -90,8 +78,6 @@ export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInvite
         onInviteAccepted();
       }
     } catch (error: any) {
-      console.error('[PendingInvitesCard] Error accepting invite:', error);
-
       // Check for free tier limit error
       if (error?.message?.includes('free_limit_reached')) {
         Alert.alert(
@@ -114,7 +100,6 @@ export const PendingInvitesCard: React.FC<PendingInvitesCardProps> = ({ onInvite
       // Remove from list
       setInvites((prev) => prev.filter((inv) => inv.invite_id !== inviteId));
     } catch (error) {
-      console.error('Error declining invite:', error);
       Alert.alert('Error', 'Failed to decline invite');
     } finally {
       setProcessingId(null);

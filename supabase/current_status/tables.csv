@@ -1,0 +1,140 @@
+table_name,column_name,data_type,is_nullable,column_default
+claim_split_requests,id,uuid,NO,gen_random_uuid()
+claim_split_requests,item_id,uuid,NO,null
+claim_split_requests,requester_id,uuid,NO,null
+claim_split_requests,original_claimer_id,uuid,NO,null
+claim_split_requests,status,text,NO,'pending'::text
+claim_split_requests,created_at,timestamp with time zone,YES,now()
+claim_split_requests,responded_at,timestamp with time zone,YES,null
+claims,id,uuid,NO,gen_random_uuid()
+claims,item_id,uuid,NO,null
+claims,claimer_id,uuid,NO,null
+claims,quantity,integer,NO,1
+claims,note,text,YES,null
+claims,created_at,timestamp with time zone,YES,now()
+claims,purchased,boolean,NO,false
+claims,assigned_to,uuid,YES,null
+daily_activity_log,id,uuid,NO,gen_random_uuid()
+daily_activity_log,user_id,uuid,NO,null
+daily_activity_log,event_id,uuid,NO,null
+daily_activity_log,activity_type,text,NO,null
+daily_activity_log,activity_data,jsonb,NO,null
+daily_activity_log,created_at,timestamp with time zone,YES,now()
+event_invites,id,uuid,NO,gen_random_uuid()
+event_invites,event_id,uuid,NO,null
+event_invites,inviter_id,uuid,NO,null
+event_invites,invitee_email,text,NO,null
+event_invites,invitee_id,uuid,YES,null
+event_invites,status,text,NO,'pending'::text
+event_invites,invited_at,timestamp with time zone,YES,now()
+event_invites,responded_at,timestamp with time zone,YES,null
+event_invites,invited_role,USER-DEFINED,NO,'giver'::member_role
+event_member_stats,event_id,uuid,NO,null
+event_member_stats,user_id,uuid,NO,null
+event_member_stats,total_claims,bigint,NO,0
+event_member_stats,unpurchased_claims,bigint,NO,0
+event_member_stats,updated_at,timestamp with time zone,NO,now()
+event_members,event_id,uuid,NO,null
+event_members,user_id,uuid,NO,null
+event_members,role,USER-DEFINED,NO,'giver'::member_role
+event_members,created_at,timestamp with time zone,YES,now()
+events,id,uuid,NO,gen_random_uuid()
+events,title,text,NO,null
+events,description,text,YES,null
+events,event_date,date,YES,null
+events,join_code,text,NO,"replace((gen_random_uuid())::text, '-'::text, ''::text)"
+events,owner_id,uuid,NO,null
+events,created_at,timestamp with time zone,YES,now()
+events,recurrence,text,NO,'none'::text
+events,last_rolled_at,date,YES,null
+events,admin_only_invites,boolean,NO,false
+items,id,uuid,NO,gen_random_uuid()
+items,list_id,uuid,NO,null
+items,name,text,NO,null
+items,url,text,YES,null
+items,price,numeric,YES,null
+items,notes,text,YES,null
+items,created_by,uuid,NO,null
+items,created_at,timestamp with time zone,YES,now()
+items,assigned_recipient_id,uuid,YES,null
+list_exclusions,list_id,uuid,NO,null
+list_exclusions,user_id,uuid,NO,null
+list_exclusions,created_at,timestamp with time zone,NO,now()
+list_recipients,list_id,uuid,NO,null
+list_recipients,user_id,uuid,YES,null
+list_recipients,can_view,boolean,NO,true
+list_recipients,recipient_email,text,YES,null
+list_recipients,id,uuid,NO,gen_random_uuid()
+list_viewers,list_id,uuid,NO,null
+list_viewers,user_id,uuid,NO,null
+lists,id,uuid,NO,gen_random_uuid()
+lists,event_id,uuid,NO,null
+lists,name,text,NO,null
+lists,created_by,uuid,NO,null
+lists,created_at,timestamp with time zone,YES,now()
+lists,visibility,USER-DEFINED,NO,'event'::list_visibility
+lists,custom_recipient_name,text,YES,null
+lists,random_assignment_enabled,boolean,NO,false
+lists,random_assignment_mode,text,YES,null
+lists,random_assignment_executed_at,timestamp with time zone,YES,null
+lists,random_receiver_assignment_enabled,boolean,NO,false
+lists,for_everyone,boolean,NO,false
+notification_queue,id,uuid,NO,gen_random_uuid()
+notification_queue,user_id,uuid,NO,null
+notification_queue,title,text,NO,null
+notification_queue,body,text,NO,null
+notification_queue,data,jsonb,YES,null
+notification_queue,sent,boolean,YES,false
+notification_queue,created_at,timestamp with time zone,YES,now()
+orphaned_lists,id,uuid,NO,gen_random_uuid()
+orphaned_lists,list_id,uuid,NO,null
+orphaned_lists,event_id,uuid,NO,null
+orphaned_lists,excluded_user_id,uuid,NO,null
+orphaned_lists,marked_at,timestamp with time zone,NO,now()
+orphaned_lists,delete_at,timestamp with time zone,NO,(now() + '30 days'::interval)
+orphaned_lists,created_at,timestamp with time zone,NO,now()
+profiles,id,uuid,NO,null
+profiles,display_name,text,YES,null
+profiles,avatar_url,text,YES,null
+profiles,created_at,timestamp with time zone,YES,now()
+profiles,onboarding_done,boolean,NO,false
+profiles,onboarding_at,timestamp with time zone,YES,null
+profiles,plan,text,NO,'free'::text
+profiles,pro_until,timestamp with time zone,YES,null
+profiles,reminder_days,integer,YES,3
+profiles,currency,character varying,YES,'USD'::character varying
+profiles,notification_digest_enabled,boolean,YES,false
+profiles,digest_time_hour,integer,YES,9
+profiles,digest_frequency,text,YES,'daily'::text
+profiles,digest_day_of_week,integer,YES,1
+push_tokens,id,uuid,NO,gen_random_uuid()
+push_tokens,user_id,uuid,NO,null
+push_tokens,token,text,NO,null
+push_tokens,platform,text,NO,null
+push_tokens,created_at,timestamp with time zone,YES,now()
+push_tokens,updated_at,timestamp with time zone,YES,now()
+rate_limit_tracking,user_id,uuid,NO,null
+rate_limit_tracking,action,text,NO,null
+rate_limit_tracking,window_start,timestamp with time zone,NO,null
+rate_limit_tracking,request_count,integer,NO,1
+security_audit_log,id,uuid,NO,gen_random_uuid()
+security_audit_log,user_id,uuid,YES,null
+security_audit_log,action,text,NO,null
+security_audit_log,resource_type,text,YES,null
+security_audit_log,resource_id,uuid,YES,null
+security_audit_log,ip_address,inet,YES,null
+security_audit_log,user_agent,text,YES,null
+security_audit_log,success,boolean,NO,null
+security_audit_log,error_message,text,YES,null
+security_audit_log,metadata,jsonb,YES,null
+security_audit_log,created_at,timestamp with time zone,NO,now()
+sent_reminders,id,uuid,NO,gen_random_uuid()
+sent_reminders,user_id,uuid,NO,null
+sent_reminders,claim_id,uuid,NO,null
+sent_reminders,event_id,uuid,NO,null
+sent_reminders,sent_at,timestamp with time zone,YES,now()
+user_plans,user_id,uuid,NO,null
+user_plans,pro_until,timestamp with time zone,YES,null
+user_plans,created_at,timestamp with time zone,NO,now()
+user_plans,updated_at,timestamp with time zone,NO,now()
+user_plans,note,text,YES,null

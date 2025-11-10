@@ -9,6 +9,7 @@ import {
   ActivityIndicator,
   Alert,
   Platform,
+  ScrollView,
 } from 'react-native';
 import * as Clipboard from 'expo-clipboard';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -24,7 +25,9 @@ import { useSettings } from '../theme/SettingsProvider';
 type EventRow = {
   id: string;
   title: string;
+  description: string | null;
   event_date: string | null;
+  recurrence: 'none' | 'weekly' | 'monthly' | 'yearly';
   join_code: string | null;
   owner_id: string | null;
 };
@@ -62,7 +65,9 @@ export default function EditEventScreen({ route, navigation }: any) {
 
   const [eventRow, setEventRow] = useState<EventRow | null>(null);
   const [title, setTitle] = useState('');
+  const [description, setDescription] = useState('');
   const [dateValue, setDateValue] = useState<Date | null>(null);
+  const [recurrence, setRecurrence] = useState<'none' | 'weekly' | 'monthly' | 'yearly'>('none');
   const [joinCode, setJoinCode] = useState('');
 
   const [isAdmin, setIsAdmin] = useState(false);
@@ -86,7 +91,7 @@ export default function EditEventScreen({ route, navigation }: any) {
 
       const { data: row, error } = await supabase
         .from('events')
-        .select('id,title,event_date,join_code,owner_id')
+        .select('id,title,description,event_date,recurrence,join_code,owner_id')
         .eq('id', id)
         .maybeSingle();
       if (error) throw error;
@@ -95,13 +100,17 @@ export default function EditEventScreen({ route, navigation }: any) {
       const normalized: EventRow = {
         id: row.id,
         title: row.title ?? '',
+        description: row.description ?? null,
         event_date: row.event_date ?? null,
+        recurrence: (row.recurrence as 'none' | 'weekly' | 'monthly' | 'yearly') ?? 'none',
         join_code: row.join_code ?? null,
         owner_id: row.owner_id ?? null,
       };
       setEventRow(normalized);
       setTitle(normalized.title);
+      setDescription(normalized.description ?? '');
       setDateValue(safeParseDate(normalized.event_date));
+      setRecurrence(normalized.recurrence);
       setJoinCode(normalized.join_code ?? '');
 
       const { data: mem, error: mErr } = await supabase
@@ -113,7 +122,6 @@ export default function EditEventScreen({ route, navigation }: any) {
       if (mErr) throw mErr;
       setIsAdmin(mem?.role === 'admin' || row.owner_id === user.id);
     } catch (e: any) {
-      console.log('[EditEvent] load error', e);
       setErrorMsg(t('editEvent.messages.failedToLoad'));
     } finally {
       setLoading(false);
@@ -132,14 +140,18 @@ export default function EditEventScreen({ route, navigation }: any) {
 
     setSaving(true);
     try {
-      const patch: any = { title: title.trim() };
+      const patch: any = {
+        title: title.trim(),
+        description: description.trim() || null,
+        recurrence: recurrence,
+      };
       patch.event_date = dateValue ? toYMD(dateValue) : null;
 
       const { data, error } = await supabase
         .from('events')
         .update(patch)
         .eq('id', id)
-        .select('id,title,event_date')
+        .select('id,title,description,event_date,recurrence')
         .single();
 
       if (error) throw error;
@@ -148,12 +160,11 @@ export default function EditEventScreen({ route, navigation }: any) {
       toast.success(t('editEvent.messages.updated'));
       navigation.goBack();
     } catch (e: any) {
-      console.log('[EditEvent] save error', e);
       toast.error(t('editEvent.messages.saveFailed'), { text2: e?.message ?? String(e) });
     } finally {
       setSaving(false);
     }
-  }, [id, title, dateValue, isAdmin, navigation, t]);
+  }, [id, title, description, dateValue, recurrence, isAdmin, navigation, t]);
 
   const copyJoinCode = useCallback(async () => {
     try {
@@ -224,7 +235,11 @@ export default function EditEventScreen({ route, navigation }: any) {
   return (
     <Screen>
       <TopBar title={t('editEvent.screenTitle', 'Edit Event')} />
-      <View style={{ padding: 16, gap: 12 }}>
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={{ padding: 16, gap: 12, paddingBottom: 32 }}
+        keyboardShouldPersistTaps="handled"
+      >
         <Text style={{ fontSize: 16, fontWeight: '700', color: colors.text }}>{t('editEvent.title')}</Text>
 
         {/* Title */}
@@ -233,6 +248,15 @@ export default function EditEventScreen({ route, navigation }: any) {
           placeholder={t('editEvent.placeholders.title')}
           value={title}
           onChangeText={setTitle}
+          editable={isAdmin}
+        />
+
+        {/* Description */}
+        <LabeledInput
+          label={t('editEvent.labels.description', 'Description (optional)')}
+          placeholder={t('editEvent.placeholders.description', 'Add details for invitees')}
+          value={description}
+          onChangeText={setDescription}
           editable={isAdmin}
         />
 
@@ -265,6 +289,43 @@ export default function EditEventScreen({ route, navigation }: any) {
             )}
           </>
         )}
+
+        {/* Recurrence selector */}
+        <View
+          style={{
+            backgroundColor: colors.card,
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }}
+        >
+          <Text style={{ fontWeight: '600', marginBottom: 6, color: colors.text }}>
+            {t('editEvent.labels.recurrence', 'Recurs')}
+          </Text>
+          <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
+            {(['none', 'weekly', 'monthly', 'yearly'] as const).map(opt => (
+              <Pressable
+                key={opt}
+                onPress={() => isAdmin && setRecurrence(opt)}
+                disabled={!isAdmin}
+                style={{
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: recurrence === opt ? '#2e95f1' : colors.card,
+                  borderWidth: recurrence === opt ? 0 : 1,
+                  borderColor: recurrence === opt ? 'transparent' : colors.border,
+                  opacity: !isAdmin ? 0.6 : 1,
+                }}
+              >
+                <Text style={{ color: recurrence === opt ? 'white' : colors.text, fontWeight: '700' }}>
+                  {t(`editEvent.recurs.${opt}`, opt.charAt(0).toUpperCase() + opt.slice(1))}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
 
         {/* Join code */}
         <View style={{ backgroundColor: colors.card, borderRadius: 12, padding: 12, borderWidth: 1, borderColor: colors.border }}>
@@ -310,7 +371,7 @@ export default function EditEventScreen({ route, navigation }: any) {
             )}
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }

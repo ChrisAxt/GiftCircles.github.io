@@ -176,7 +176,7 @@ export const detectUserCurrency = (): string => {
     // Default to USD
     return 'USD';
   } catch (error) {
-    console.error('Failed to detect currency:', error);
+    // Failed to detect currency, defaulting to USD
     return 'USD';
   }
 };

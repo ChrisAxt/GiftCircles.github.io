@@ -26,37 +26,30 @@ export default function JoinEventScreen({ navigation }: any) {
       if (!user) throw new Error('Not signed in');
 
       // Check if user can join (free tier limit: 3 total events)
-      console.log('[JoinEvent] Checking can_join_event for user:', user.id);
       const { data: canJoin, error: checkError } = await supabase.rpc('can_join_event', {
         p_user: user.id
       });
 
       if (checkError) {
-        console.log('[JoinEvent] can_join_event RPC error:', checkError);
         const errorDetails = parseSupabaseError(checkError, t);
         return Alert.alert(errorDetails.title, errorDetails.message);
       }
 
       if (canJoin === false) {
-        console.log('[JoinEvent] Free tier limit reached - blocking join');
         return Alert.alert(
           t('errors.limits.freeLimitTitle', 'Upgrade required'),
           t('errors.limits.freeLimitMessage', 'You can create up to 3 events on the free plan. Upgrade to create more.')
         );
       }
 
-      console.log('[JoinEvent] Calling join_event RPC');
       const { data: eventId, error } = await supabase.rpc('join_event', { p_code: trimmed });
       if (error) {
-        console.log('[JoinEvent] join_event RPC error:', error);
         const errorDetails = parseSupabaseError(error, t);
         return Alert.alert(errorDetails.title, errorDetails.message);
       }
 
-      console.log('[JoinEvent] Successfully joined event:', eventId);
       navigation.replace('EventDetail', { id: eventId });
     } catch (err: any) {
-      console.log('[JoinEvent] Error:', err);
       const errorDetails = parseSupabaseError(err, t);
       Alert.alert(errorDetails.title, errorDetails.message);
     } finally {

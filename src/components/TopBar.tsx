@@ -16,8 +16,8 @@ export default function TopBar({ title, right, onBack }: TopBarProps) {
 
   return (
     <View style={{ backgroundColor: colors.card }}>
-      {/* Safe-area spacer */}
-      <View style={{ height: top }} />
+      {/* Safe-area spacer - ensure minimum padding for devices without notch */}
+      <View style={{ height: Math.max(top, 0) }} />
       {/* Bar */}
       <View
         style={{

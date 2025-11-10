@@ -1,0 +1,101 @@
+table_name,constraint_name,constraint_type,definition
+profiles,chk_profiles_digest_day_valid,CHECK,CHECK (((digest_day_of_week >= 0) AND (digest_day_of_week <= 6)))
+profiles,chk_profiles_digest_hour_valid,CHECK,CHECK (((digest_time_hour >= 0) AND (digest_time_hour <= 23)))
+profiles,chk_profiles_reminder_days_valid,CHECK,CHECK (((reminder_days >= 0) AND (reminder_days <= 365)))
+profiles,profiles_digest_day_of_week_check,CHECK,CHECK (((digest_day_of_week >= 0) AND (digest_day_of_week <= 6)))
+profiles,profiles_digest_frequency_check,CHECK,"CHECK ((digest_frequency = ANY (ARRAY['daily'::text, 'weekly'::text])))"
+profiles,profiles_digest_time_hour_check,CHECK,CHECK (((digest_time_hour >= 0) AND (digest_time_hour <= 23)))
+profiles,profiles_reminder_days_check,CHECK,CHECK (((reminder_days >= 0) AND (reminder_days <= 30)))
+profiles,profiles_id_fkey,FOREIGN KEY,FOREIGN KEY (id) REFERENCES auth.users(id) ON DELETE CASCADE
+profiles,profiles_pkey,PRIMARY KEY,PRIMARY KEY (id)
+events,chk_events_date_reasonable,CHECK,CHECK (((event_date IS NULL) OR (event_date >= '2020-01-01'::date)))
+events,events_recurrence_check,CHECK,"CHECK ((recurrence = ANY (ARRAY['none'::text, 'weekly'::text, 'monthly'::text, 'yearly'::text])))"
+events,events_owner_id_fkey,FOREIGN KEY,FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE CASCADE
+events,fk_events_owner_id,FOREIGN KEY,FOREIGN KEY (owner_id) REFERENCES auth.users(id) ON DELETE SET NULL
+events,events_pkey,PRIMARY KEY,PRIMARY KEY (id)
+events,events_join_code_key,UNIQUE,UNIQUE (join_code)
+event_members,event_members_event_id_fkey,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+event_members,event_members_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+event_members,fk_event_members_event_id,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+event_members,fk_event_members_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+event_members,event_members_pkey,PRIMARY KEY,"PRIMARY KEY (event_id, user_id)"
+lists,lists_random_assignment_mode_check,CHECK,"CHECK ((random_assignment_mode = ANY (ARRAY['one_per_member'::text, 'distribute_all'::text])))"
+lists,fk_lists_created_by,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
+lists,fk_lists_event_id,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+lists,lists_created_by_fkey,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE CASCADE
+lists,lists_event_id_fkey,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+lists,lists_pkey,PRIMARY KEY,PRIMARY KEY (id)
+list_recipients,list_recipients_user_or_email_check,CHECK,CHECK ((((user_id IS NOT NULL) AND (recipient_email IS NULL)) OR ((user_id IS NULL) AND (recipient_email IS NOT NULL))))
+list_recipients,fk_list_recipients_list_id,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+list_recipients,fk_list_recipients_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+list_recipients,list_recipients_list_id_fkey,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+list_recipients,list_recipients_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+list_recipients,list_recipients_pkey,PRIMARY KEY,PRIMARY KEY (id)
+items,chk_items_price_positive,CHECK,CHECK (((price IS NULL) OR (price >= (0)::numeric)))
+items,fk_items_assigned_recipient_id,FOREIGN KEY,FOREIGN KEY (assigned_recipient_id) REFERENCES auth.users(id) ON DELETE SET NULL
+items,fk_items_created_by,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE SET NULL
+items,fk_items_list_id,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+items,items_assigned_recipient_id_fkey,FOREIGN KEY,FOREIGN KEY (assigned_recipient_id) REFERENCES profiles(id) ON DELETE SET NULL
+items,items_created_by_fkey,FOREIGN KEY,FOREIGN KEY (created_by) REFERENCES auth.users(id) ON DELETE CASCADE
+items,items_list_id_fkey,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+items,items_pkey,PRIMARY KEY,PRIMARY KEY (id)
+claims,chk_claims_quantity_positive,CHECK,CHECK ((quantity > 0))
+claims,claims_quantity_check,CHECK,CHECK ((quantity > 0))
+claims,claims_assigned_to_fkey,FOREIGN KEY,FOREIGN KEY (assigned_to) REFERENCES profiles(id) ON DELETE CASCADE
+claims,claims_claimer_id_fkey,FOREIGN KEY,FOREIGN KEY (claimer_id) REFERENCES auth.users(id) ON DELETE CASCADE
+claims,claims_item_id_fkey,FOREIGN KEY,FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+claims,fk_claims_assigned_to,FOREIGN KEY,FOREIGN KEY (assigned_to) REFERENCES auth.users(id) ON DELETE SET NULL
+claims,fk_claims_claimer_id,FOREIGN KEY,FOREIGN KEY (claimer_id) REFERENCES auth.users(id) ON DELETE SET NULL
+claims,fk_claims_item_id,FOREIGN KEY,FOREIGN KEY (item_id) REFERENCES items(id) ON DELETE CASCADE
+claims,claims_pkey,PRIMARY KEY,PRIMARY KEY (id)
+claims,claims_item_id_claimer_id_key,UNIQUE,"UNIQUE (item_id, claimer_id)"
+list_viewers,fk_list_viewers_list_id,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+list_viewers,fk_list_viewers_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+list_viewers,list_viewers_list_id_fkey,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+list_viewers,list_viewers_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+list_viewers,list_viewers_pkey,PRIMARY KEY,"PRIMARY KEY (list_id, user_id)"
+list_exclusions,fk_list_exclusions_list_id,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+list_exclusions,fk_list_exclusions_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+list_exclusions,list_exclusions_list_id_fkey,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+list_exclusions,list_exclusions_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES profiles(id) ON DELETE CASCADE
+list_exclusions,list_exclusions_pkey,PRIMARY KEY,"PRIMARY KEY (list_id, user_id)"
+user_plans,fk_user_plans_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+user_plans,user_plans_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+user_plans,user_plans_pkey,PRIMARY KEY,PRIMARY KEY (user_id)
+sent_reminders,fk_sent_reminders_claim_id,FOREIGN KEY,FOREIGN KEY (claim_id) REFERENCES claims(id) ON DELETE CASCADE
+sent_reminders,fk_sent_reminders_event_id,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+sent_reminders,fk_sent_reminders_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+sent_reminders,sent_reminders_claim_id_fkey,FOREIGN KEY,FOREIGN KEY (claim_id) REFERENCES claims(id) ON DELETE CASCADE
+sent_reminders,sent_reminders_event_id_fkey,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+sent_reminders,sent_reminders_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+sent_reminders,sent_reminders_pkey,PRIMARY KEY,PRIMARY KEY (id)
+sent_reminders,sent_reminders_claim_id_event_id_key,UNIQUE,"UNIQUE (claim_id, event_id)"
+push_tokens,push_tokens_platform_check,CHECK,"CHECK ((platform = ANY (ARRAY['ios'::text, 'android'::text, 'web'::text])))"
+push_tokens,fk_push_tokens_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+push_tokens,push_tokens_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+push_tokens,push_tokens_pkey,PRIMARY KEY,PRIMARY KEY (id)
+push_tokens,push_tokens_token_key,UNIQUE,UNIQUE (token)
+notification_queue,fk_notification_queue_user_id,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+notification_queue,notification_queue_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+notification_queue,notification_queue_pkey,PRIMARY KEY,PRIMARY KEY (id)
+event_invites,event_invites_status_check,CHECK,"CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'declined'::text])))"
+event_invites,event_invites_event_id_fkey,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+event_invites,event_invites_invitee_id_fkey,FOREIGN KEY,FOREIGN KEY (invitee_id) REFERENCES auth.users(id) ON DELETE CASCADE
+event_invites,event_invites_inviter_id_fkey,FOREIGN KEY,FOREIGN KEY (inviter_id) REFERENCES auth.users(id) ON DELETE CASCADE
+event_invites,fk_event_invites_event_id,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+event_invites,fk_event_invites_invitee_id,FOREIGN KEY,FOREIGN KEY (invitee_id) REFERENCES auth.users(id) ON DELETE CASCADE
+event_invites,fk_event_invites_inviter_id,FOREIGN KEY,FOREIGN KEY (inviter_id) REFERENCES auth.users(id) ON DELETE CASCADE
+event_invites,event_invites_pkey,PRIMARY KEY,PRIMARY KEY (id)
+event_invites,event_invites_event_id_invitee_email_key,UNIQUE,"UNIQUE (event_id, invitee_email)"
+orphaned_lists,fk_orphaned_lists_event_id,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+orphaned_lists,fk_orphaned_lists_excluded_user_id,FOREIGN KEY,FOREIGN KEY (excluded_user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+orphaned_lists,fk_orphaned_lists_list_id,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+orphaned_lists,orphaned_lists_event_id_fkey,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+orphaned_lists,orphaned_lists_excluded_user_id_fkey,FOREIGN KEY,FOREIGN KEY (excluded_user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+orphaned_lists,orphaned_lists_list_id_fkey,FOREIGN KEY,FOREIGN KEY (list_id) REFERENCES lists(id) ON DELETE CASCADE
+orphaned_lists,orphaned_lists_pkey,PRIMARY KEY,PRIMARY KEY (id)
+orphaned_lists,orphaned_lists_list_id_excluded_user_id_key,UNIQUE,"UNIQUE (list_id, excluded_user_id)"
+daily_activity_log,daily_activity_log_activity_type_check,CHECK,"CHECK ((activity_type = ANY (ARRAY['new_list'::text, 'new_item'::text, 'new_claim'::text])))"
+daily_activity_log,daily_activity_log_event_id_fkey,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE
+daily_activity_log,daily_activity_log_user_id_fkey,FOREIGN KEY,FOREIGN KEY (user_id) REFERENCES auth.users(id) ON DELETE CASCADE
+daily_activity_log,fk_daily_activity_log_event_id,FOREIGN KEY,FOREIGN KEY (event_id) REFERENCES events(id) ON DELETE CASCADE

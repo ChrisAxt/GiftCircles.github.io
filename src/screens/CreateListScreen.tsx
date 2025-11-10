@@ -31,11 +31,15 @@ export default function CreateListScreen({ route, navigation }: any) {
   const [recipientIds, setRecipientIds] = useState<Record<string, boolean>>({});
   const [restrict, setRestrict] = useState(false); // false = visible to event, true = exclude specific people
   const [viewerIds, setViewerIds] = useState<Record<string, boolean>>({}); // reused as "excluded" set in UI
+  const [inviteByEmailSelected, setInviteByEmailSelected] = useState(false);
   const [otherRecipientSelected, setOtherRecipientSelected] = useState(false);
   const [otherRecipientName, setOtherRecipientName] = useState('');
   const [recipientEmails, setRecipientEmails] = useState<string[]>([]);
   const [emailInput, setEmailInput] = useState('');
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [randomAssignment, setRandomAssignment] = useState(false);
+  const [randomAssignmentMode, setRandomAssignmentMode] = useState<'one_per_member' | 'distribute_all'>('one_per_member');
+  const [randomReceiverAssignment, setRandomReceiverAssignment] = useState(false);
 
   const toggleRecipient = (uid: string) => setRecipientIds(prev => ({ ...prev, [uid]: !prev[uid] }));
   const toggleViewer = (uid: string) => setViewerIds(prev => ({ ...prev, [uid]: !prev[uid] }));
@@ -74,7 +78,7 @@ export default function CreateListScreen({ route, navigation }: any) {
         setProfilesMap(profiles);
       } catch (err: any) {
         const errorDetails = parseSupabaseError(err, t);
-        toast.error(errorDetails.title, errorDetails.message);
+        toast.error(errorDetails.title, { text2: errorDetails.message });
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -94,46 +98,69 @@ export default function CreateListScreen({ route, navigation }: any) {
     [members, profilesMap, t]
   );
 
+  // Check if all members are selected
+  const allMembersSelected = useMemo(() => {
+    if (!membersWithNames || membersWithNames.length === 0) return false;
+    return membersWithNames.every(m => recipientIds[m.user_id]);
+  }, [recipientIds, membersWithNames]);
+
+  // Toggle "Everyone" - select/deselect all members
+  const toggleEveryone = () => {
+    if (allMembersSelected) {
+      // Deselect all
+      setRecipientIds({});
+    } else {
+      // Select all
+      const all: Record<string, boolean> = {};
+      membersWithNames.forEach(m => { all[m.user_id] = true; });
+      setRecipientIds(all);
+    }
+  };
+
   const create = async () => {
-    console.log('[CreateList] create() called, submitting:', submitting);
     if (submitting) return;
 
     try {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
       if (!user) {
-        console.log('[CreateList] User not signed in');
-        toast.error(t('createList.toasts.notSignedIn'));
+        toast.error(t('createList.toasts.notSignedIn'), {});
         return;
       }
 
       if (!name.trim()) {
-        console.log('[CreateList] List name required');
-        toast.info(t('createList.toasts.listNameRequired'));
+        toast.info(t('createList.toasts.listNameRequired'), {});
         return;
       }
 
       // Recipients
       const chosenRecipients = Object.keys(recipientIds).filter(uid => !!recipientIds[uid]);
-      console.log('[CreateList] Validation - chosenRecipients:', chosenRecipients, 'otherSelected:', otherRecipientSelected, 'otherName:', otherRecipientName, 'emails:', recipientEmails);
 
-      if (!chosenRecipients.length && !otherRecipientSelected && recipientEmails.length === 0) {
-        console.log('[CreateList] No recipients selected');
+      // Validation: At least one recipient source required
+      if (!chosenRecipients.length && !otherRecipientSelected && !inviteByEmailSelected) {
         toast.error(t('createList.toasts.recipientsRequired.title'),
         { text2: t('createList.toasts.recipientsRequired.body')});
         return;
       }
 
+      // If "Other" is selected, name is required
       if (otherRecipientSelected && !otherRecipientName.trim()) {
-        console.log('[CreateList] Other recipient name required');
-        toast.info(t('createList.toasts.otherRecipientNameRequired', 'Please enter a name for the other recipient'));
+        toast.info(t('createList.toasts.otherRecipientNameRequired', 'Please enter a name for the other recipient'), {});
+        return;
+      }
+
+      // If "Invite by Email" is selected, at least one email is required
+      if (inviteByEmailSelected && recipientEmails.length === 0) {
+        toast.info(t('createList.toasts.emailRecipientRequired', 'Please add at least one email address'), {});
         return;
       }
 
       setSubmitting(true);
 
-      // Using EXCLUSIONS model RPC
-      console.log('[CreateList] Calling create_list_with_people RPC', { eventId, name: name.trim(), recipients: chosenRecipients, customRecipient: otherRecipientSelected ? otherRecipientName.trim() : null });
+      // Determine if "for_everyone" flag should be set
+      // When all members are selected, this becomes a list "for everyone"
+      const forEveryone = allMembersSelected && chosenRecipients.length > 0;
+
       const { data: newListId, error: rpcErr } = await supabase.rpc('create_list_with_people', {
         p_event_id: eventId,
         p_name: name.trim(),
@@ -142,25 +169,25 @@ export default function CreateListScreen({ route, navigation }: any) {
         p_hidden_recipients: [] as string[],
         p_viewers: [] as string[],
         p_custom_recipient_name: otherRecipientSelected ? otherRecipientName.trim() : null,
+        p_random_assignment_enabled: randomAssignment,
+        p_random_assignment_mode: randomAssignment ? randomAssignmentMode : null,
+        p_random_receiver_assignment_enabled: randomReceiverAssignment,
+        p_for_everyone: forEveryone,
       });
 
       if (rpcErr) {
-        console.log('[CreateList] RPC error:', JSON.stringify(rpcErr, null, 2));
         const errorDetails = parseSupabaseError(rpcErr, t);
-        toast.error(errorDetails.title, errorDetails.message);
+        toast.error(errorDetails.title, { text2: errorDetails.message });
         setSubmitting(false); // Important: reset state before returning
         return;
       }
 
       if (!newListId) {
-        console.log('[CreateList] No list ID returned');
         toast.error(t('createList.toasts.createFailed.title'),
         { text2: t('createList.toasts.createFailed.noId')});
         setSubmitting(false); // Important: reset state before returning
         return;
       }
-
-      console.log('[CreateList] List created successfully:', newListId);
 
       // Exclusions: reuse viewerIds as "excluded"
       const excludedUserIds = Object.keys(viewerIds).filter(uid => !!viewerIds[uid]);
@@ -172,17 +199,13 @@ export default function CreateListScreen({ route, navigation }: any) {
 
       // Add email recipients (auto-invites to event)
       if (recipientEmails.length > 0) {
-        console.log('[CreateList] Adding email recipients:', recipientEmails);
         for (const email of recipientEmails) {
           const { error: emailErr } = await supabase.rpc('add_list_recipient', {
             p_list_id: newListId,
             p_recipient_email: email,
           });
           if (emailErr) {
-            console.log('[CreateList] Error adding email recipient:', email, emailErr);
             toast.error(t('createList.toasts.inviteFailedTitle', { email }), { text2: emailErr.message });
-          } else {
-            console.log('[CreateList] Successfully added email recipient:', email);
           }
         }
       }
@@ -192,7 +215,7 @@ export default function CreateListScreen({ route, navigation }: any) {
       navigation.goBack();
     } catch (err: any) {
       const errorDetails = parseSupabaseError(err, t);
-      toast.error(errorDetails.title, errorDetails.message);
+      toast.error(errorDetails.title, { text2: errorDetails.message });
     } finally {
       setSubmitting(false);
     }
@@ -271,9 +294,59 @@ export default function CreateListScreen({ route, navigation }: any) {
                 );
               })}
 
+              {/* Everyone option */}
+              <Pressable
+                onPress={toggleEveryone}
+                style={{
+                  marginRight: 8,
+                  marginBottom: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: allMembersSelected ? '#2e95f1' : colors.card,
+                  borderWidth: 1,
+                  borderColor: allMembersSelected ? '#2e95f1' : colors.border,
+                }}
+              >
+                <Text style={{ color: allMembersSelected ? 'white' : colors.text, fontWeight: '700' }}>
+                  {t('createList.recipients.everyone', 'Everyone')}
+                </Text>
+              </Pressable>
+
+              {/* Invite by Email option */}
+              <Pressable
+                onPress={() => {
+                  setInviteByEmailSelected(!inviteByEmailSelected);
+                  if (!inviteByEmailSelected) {
+                    // If selecting Invite by Email, deselect Other
+                    setOtherRecipientSelected(false);
+                  }
+                }}
+                style={{
+                  marginRight: 8,
+                  marginBottom: 8,
+                  paddingVertical: 8,
+                  paddingHorizontal: 12,
+                  borderRadius: 999,
+                  backgroundColor: inviteByEmailSelected ? '#10b981' : colors.card,
+                  borderWidth: 1,
+                  borderColor: inviteByEmailSelected ? '#10b981' : colors.border,
+                }}
+              >
+                <Text style={{ color: inviteByEmailSelected ? 'white' : colors.text, fontWeight: '700' }}>
+                  {t('createList.recipients.inviteByEmail', 'Invite by Email')}
+                </Text>
+              </Pressable>
+
               {/* Other option */}
               <Pressable
-                onPress={() => setOtherRecipientSelected(!otherRecipientSelected)}
+                onPress={() => {
+                  setOtherRecipientSelected(!otherRecipientSelected);
+                  if (!otherRecipientSelected) {
+                    // If selecting Other, deselect Invite by Email
+                    setInviteByEmailSelected(false);
+                  }
+                }}
                 style={{
                   marginRight: 8,
                   marginBottom: 8,
@@ -303,102 +376,104 @@ export default function CreateListScreen({ route, navigation }: any) {
               </View>
             )}
 
-            {/* Email recipients section */}
-            <View style={{ marginTop: 12 }}>
-              <Text style={{ fontWeight: '700', color: colors.text, marginBottom: 4 }}>
-                {t('createList.sections.emailRecipients.title')}
-              </Text>
-              <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
-                {t('createList.sections.emailRecipients.help')}
-              </Text>
+            {/* Email recipients section - only show when Invite by Email is selected */}
+            {inviteByEmailSelected && (
+              <View style={{ marginTop: 12 }}>
+                <Text style={{ fontWeight: '700', color: colors.text, marginBottom: 4 }}>
+                  {t('createList.sections.emailRecipients.title')}
+                </Text>
+                <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
+                  {t('createList.sections.emailRecipients.help')}
+                </Text>
 
-              {/* Email chips */}
-              {recipientEmails.length > 0 && (
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
-                  {recipientEmails.map((email, idx) => (
-                    <View
-                      key={idx}
-                      style={{
-                        marginRight: 8,
-                        marginBottom: 8,
-                        paddingVertical: 6,
-                        paddingHorizontal: 10,
-                        borderRadius: 999,
-                        backgroundColor: '#10b981',
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                      }}
-                    >
-                      <Text style={{ color: 'white', fontWeight: '600', fontSize: 13 }}>
-                        {email}
-                      </Text>
-                      <Pressable
-                        onPress={() => setRecipientEmails(prev => prev.filter((_, i) => i !== idx))}
-                        hitSlop={8}
-                        style={{ marginLeft: 6 }}
+                {/* Email chips */}
+                {recipientEmails.length > 0 && (
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 }}>
+                    {recipientEmails.map((email, idx) => (
+                      <View
+                        key={idx}
+                        style={{
+                          marginRight: 8,
+                          marginBottom: 8,
+                          paddingVertical: 6,
+                          paddingHorizontal: 10,
+                          borderRadius: 999,
+                          backgroundColor: '#10b981',
+                          flexDirection: 'row',
+                          alignItems: 'center',
+                        }}
                       >
-                        <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>×</Text>
-                      </Pressable>
-                    </View>
-                  ))}
-                </View>
-              )}
+                        <Text style={{ color: 'white', fontWeight: '600', fontSize: 13 }}>
+                          {email}
+                        </Text>
+                        <Pressable
+                          onPress={() => setRecipientEmails(prev => prev.filter((_, i) => i !== idx))}
+                          hitSlop={8}
+                          style={{ marginLeft: 6 }}
+                        >
+                          <Text style={{ color: 'white', fontWeight: 'bold', fontSize: 16 }}>×</Text>
+                        </Pressable>
+                      </View>
+                    ))}
+                  </View>
+                )}
 
-              {/* Email input */}
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <TextInput
-                    style={{
-                      borderWidth: 1,
-                      borderColor: colors.border,
-                      borderRadius: 8,
-                      padding: 12,
-                      color: colors.text,
-                      backgroundColor: colors.card,
+                {/* Email input */}
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <TextInput
+                      style={{
+                        borderWidth: 1,
+                        borderColor: colors.border,
+                        borderRadius: 8,
+                        padding: 12,
+                        color: colors.text,
+                        backgroundColor: colors.card,
+                      }}
+                      placeholder={t('createList.sections.emailRecipients.placeholder')}
+                      placeholderTextColor={colors.text + '80'}
+                      value={emailInput}
+                      onChangeText={setEmailInput}
+                      keyboardType="email-address"
+                      autoCapitalize="none"
+                      autoCorrect={false}
+                    />
+                  </View>
+                  <Pressable
+                    onPress={() => {
+                      const email = emailInput.trim().toLowerCase();
+                      if (!email) return;
+
+                      // Basic email validation
+                      if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                        toast.error(t('createList.toasts.invalidEmailTitle'), { text2: t('createList.toasts.invalidEmailBody') });
+                        return;
+                      }
+
+                      // Check for duplicates
+                      if (recipientEmails.includes(email)) {
+                        toast.info(t('createList.toasts.duplicateEmailTitle'), { text2: t('createList.toasts.duplicateEmailBody') });
+                        return;
+                      }
+
+                      setRecipientEmails(prev => [...prev, email]);
+                      setEmailInput('');
                     }}
-                    placeholder={t('createList.sections.emailRecipients.placeholder')}
-                    placeholderTextColor={colors.text + '80'}
-                    value={emailInput}
-                    onChangeText={setEmailInput}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    autoCorrect={false}
-                  />
+                    style={{
+                      backgroundColor: '#2e95f1',
+                      paddingHorizontal: 16,
+                      paddingVertical: 12,
+                      borderRadius: 8,
+                      justifyContent: 'center',
+                    }}
+                  >
+                    <Text style={{ color: 'white', fontWeight: '700' }}>
+                      {t('createList.sections.emailRecipients.addButton')}
+                    </Text>
+                  </Pressable>
                 </View>
-                <Pressable
-                  onPress={() => {
-                    const email = emailInput.trim().toLowerCase();
-                    if (!email) return;
-
-                    // Basic email validation
-                    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                      toast.error(t('createList.toasts.invalidEmailTitle'), { text2: t('createList.toasts.invalidEmailBody') });
-                      return;
-                    }
-
-                    // Check for duplicates
-                    if (recipientEmails.includes(email)) {
-                      toast.info(t('createList.toasts.duplicateEmailTitle'), { text2: t('createList.toasts.duplicateEmailBody') });
-                      return;
-                    }
-
-                    setRecipientEmails(prev => [...prev, email]);
-                    setEmailInput('');
-                  }}
-                  style={{
-                    backgroundColor: '#2e95f1',
-                    paddingHorizontal: 16,
-                    paddingVertical: 12,
-                    borderRadius: 8,
-                    justifyContent: 'center',
-                  }}
-                >
-                  <Text style={{ color: 'white', fontWeight: '700' }}>
-                    {t('createList.sections.emailRecipients.addButton')}
-                  </Text>
-                </Pressable>
               </View>
-            </View>
+            )}
 
             {/* Divider */}
             <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.6, marginVertical: 4 }} />
@@ -481,6 +556,187 @@ export default function CreateListScreen({ route, navigation }: any) {
                     );
                   })}
                 </View>
+              </View>
+            )}
+
+            {/* Divider */}
+            <View style={{ height: 1, backgroundColor: colors.border, opacity: 0.6, marginVertical: 4 }} />
+
+            {/* Random Assignment */}
+            <View
+              style={{
+                backgroundColor: colors.card,
+                borderRadius: 12,
+                padding: 12,
+                borderWidth: 1,
+                borderColor: colors.border,
+                marginTop: 12,
+              }}
+            >
+              <Pressable
+                onPress={() => setRandomAssignment(!randomAssignment)}
+                style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+              >
+                <View style={{ flex: 1, marginRight: 12 }}>
+                  <Text style={{ fontWeight: '600', marginBottom: 4, color: colors.text }}>
+                    {t('createList.randomAssignment.label', 'Random Assignment')}
+                  </Text>
+                  <Text style={{ fontSize: 12, opacity: 0.7, color: colors.text }}>
+                    {t('createList.randomAssignment.desc', 'Automatically assign items to members. Each person only sees their assignment.')}
+                  </Text>
+                </View>
+                <View
+                  style={{
+                    width: 24,
+                    height: 24,
+                    borderRadius: 4,
+                    borderWidth: 2,
+                    borderColor: randomAssignment ? '#2e95f1' : colors.border,
+                    backgroundColor: randomAssignment ? '#2e95f1' : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  {randomAssignment && (
+                    <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>✓</Text>
+                  )}
+                </View>
+              </Pressable>
+
+              {/* Assignment mode options */}
+              {randomAssignment && (
+                <View style={{ marginTop: 12 }}>
+                  <Text style={{ fontWeight: '600', marginBottom: 8, color: colors.text }}>
+                    {t('createList.randomAssignment.modeLabel', 'Assignment Mode')}
+                  </Text>
+
+                  <Pressable
+                    onPress={() => setRandomAssignmentMode('one_per_member')}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      backgroundColor: randomAssignmentMode === 'one_per_member' ? 'rgba(171, 217, 255, 0.2)' : 'transparent',
+                      marginBottom: 8,
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: randomAssignmentMode === 'one_per_member' ? '#2e95f1' : colors.border,
+                        backgroundColor: randomAssignmentMode === 'one_per_member' ? '#2e95f1' : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 10,
+                      }}
+                    >
+                      {randomAssignmentMode === 'one_per_member' && (
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: 'white' }} />
+                      )}
+                    </View>
+                    <Text style={{ flex: 1, color: colors.text, fontWeight: randomAssignmentMode === 'one_per_member' ? '600' : '400' }}>
+                      {t('createList.randomAssignment.onePerMember', 'One item per member')}
+                    </Text>
+                  </Pressable>
+
+                  <Pressable
+                    onPress={() => setRandomAssignmentMode('distribute_all')}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      backgroundColor: randomAssignmentMode === 'distribute_all' ? 'rgba(171, 217, 255, 0.2)' : 'transparent',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 10,
+                        borderWidth: 2,
+                        borderColor: randomAssignmentMode === 'distribute_all' ? '#2e95f1' : colors.border,
+                        backgroundColor: randomAssignmentMode === 'distribute_all' ? '#2e95f1' : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 10,
+                      }}
+                    >
+                      {randomAssignmentMode === 'distribute_all' && (
+                        <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: 'white' }} />
+                      )}
+                    </View>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: colors.text, fontWeight: randomAssignmentMode === 'distribute_all' ? '600' : '400' }}>
+                        {t('createList.randomAssignment.distributeAll', 'Distribute all items')}
+                      </Text>
+                      <Text style={{ fontSize: 11, opacity: 0.6, color: colors.text, marginTop: 2 }}>
+                        {t('createList.randomAssignment.distributeAllWarning', 'Some members may receive more items than others')}
+                      </Text>
+                    </View>
+                  </Pressable>
+                </View>
+              )}
+            </View>
+
+            {/* Random Receiver Assignment */}
+            {randomAssignment && (
+              <View
+                style={{
+                  backgroundColor: colors.card,
+                  borderRadius: 12,
+                  padding: 12,
+                  borderWidth: 1,
+                  borderColor: colors.border,
+                  marginTop: 12,
+                }}
+              >
+                <Pressable
+                  onPress={() => setRandomReceiverAssignment(!randomReceiverAssignment)}
+                  style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+                >
+                  <View style={{ flex: 1, marginRight: 12 }}>
+                    <Text style={{ fontWeight: '600', marginBottom: 4, color: colors.text }}>
+                      {t('createList.randomReceiverAssignment.label', 'Random Receiver Assignment')}
+                    </Text>
+                    <Text style={{ fontSize: 12, opacity: 0.7, color: colors.text }}>
+                      {t('createList.randomReceiverAssignment.desc', 'Each item is randomly assigned to a specific recipient. Only the giver knows who will receive their item.')}
+                    </Text>
+                  </View>
+                  <View
+                    style={{
+                      width: 24,
+                      height: 24,
+                      borderRadius: 4,
+                      borderWidth: 2,
+                      borderColor: randomReceiverAssignment ? '#2e95f1' : colors.border,
+                      backgroundColor: randomReceiverAssignment ? '#2e95f1' : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                    }}
+                  >
+                    {randomReceiverAssignment && (
+                      <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>✓</Text>
+                    )}
+                  </View>
+                </Pressable>
+
+                {randomReceiverAssignment && (
+                  <View style={{ marginTop: 12, padding: 12, backgroundColor: 'rgba(255, 193, 7, 0.1)', borderRadius: 8 }}>
+                    <Text style={{ fontSize: 12, color: colors.text, fontWeight: '600', marginBottom: 4 }}>
+                      {t('createList.randomReceiverAssignment.noteTitle', 'Important:')}
+                    </Text>
+                    <Text style={{ fontSize: 11, color: colors.text, opacity: 0.8 }}>
+                      {t('createList.randomReceiverAssignment.note', 'Recipients will not see items assigned to them. Each giver will see their assigned recipient\'s name. Requires at least 2 members.')}
+                    </Text>
+                  </View>
+                )}
               </View>
             )}
 

@@ -1,6 +1,6 @@
 // src/screens/ProfileScreen.tsx
 import React, { useCallback, useState } from 'react';
-import { View, Text, ActivityIndicator, Alert, Pressable, ScrollView } from 'react-native';
+import { View, Text, ActivityIndicator, Alert, Pressable, ScrollView, Linking } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -23,6 +23,7 @@ export default function ProfileScreen({ navigation }: any) {
   const [listsCreated, setListsCreated] = useState<number>(0);
   const [deleting, setDeleting] = useState(false);
   const [signingOut, setSigningOut] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   const { colors } = useTheme();
   const { t } = useTranslation();
@@ -57,14 +58,19 @@ export default function ProfileScreen({ navigation }: any) {
 
       setUserId(user.id);
       setEmail(user.email ?? '');
-      setCreatedAt(new Date(user.created_at ?? Date.now()).toLocaleDateString());
+      const date = new Date(user.created_at ?? Date.now());
+      setCreatedAt(`${date.getDate().toString().padStart(2, '0')}/${(date.getMonth() + 1).toString().padStart(2, '0')}/${date.getFullYear()}`);
 
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name')
+        .select('display_name, plan, pro_until')
         .eq('id', user.id)
         .maybeSingle();
       setDisplayName((prof?.display_name ?? '').trim());
+
+      // Check if user is pro
+      const userIsPro = prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
+      setIsPro(!!userIsPro);
 
       const { count: evCount } = await supabase
         .from('event_members')
@@ -83,7 +89,6 @@ export default function ProfileScreen({ navigation }: any) {
         stopIndicators();
         return;
       }
-      console.log('[Profile] load error', e);
       toast.error(t('profile.alerts.loadFailedTitle', 'Load failed'), { text2: e?.message ?? String(e) });
     } finally {
       clearTimeout(failsafe);
@@ -114,7 +119,6 @@ export default function ProfileScreen({ navigation }: any) {
       toast.success(t('profile.alerts.saveOkTitle'), { text2: t('profile.alerts.saveOkBody') });
       await load();
     } catch (e: any) {
-      console.log('[Profile] saveName error', e);
       toast.error(t('profile.alerts.saveErrTitle'), { text2: e?.message ?? String(e) });
     } finally {
       setSaving(false);
@@ -131,6 +135,33 @@ export default function ProfileScreen({ navigation }: any) {
       toast.error(t('profile.alerts.signOutErrTitle'), { text2: e?.message ?? String(e) });
     }
   };
+  const handleSupportUs = () => {
+    Alert.alert(
+      t('profile.supportUs.title', 'Support Us'),
+      t('profile.supportUs.message', 'This is a one-time donation and won\'t grant premium access due to app store rules. Thank you for your support!'),
+      [
+        {
+          text: t('profile.supportUs.cancel', 'Maybe later'),
+          style: 'cancel',
+        },
+        {
+          text: t('profile.supportUs.confirm', 'Support us'),
+          onPress: async () => {
+            // TODO: Replace with actual Buy Me a Coffee URL
+            const url = 'https://buymeacoffee.com/giftcircles';
+            const supported = await Linking.canOpenURL(url);
+
+            if (supported) {
+              await Linking.openURL(url);
+            } else {
+              toast.error(t('support.errors.cantOpenUrl'), { text2: url });
+            }
+          },
+        },
+      ]
+    );
+  };
+
   const handleSignOut = async () => {
     setSigningOut(true);
     try { await signOut(); } finally { setSigningOut(false); }
@@ -179,6 +210,34 @@ export default function ProfileScreen({ navigation }: any) {
   return (
     <Screen withTopSafeArea>
       <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: bottomPad }}>
+        {/* Support Us button - only shown for free users */}
+        {!isPro && (
+          <View style={{ marginHorizontal: 16, marginTop: 16 }}>
+            <Pressable
+              onPress={handleSupportUs}
+              style={({ pressed }) => ({
+                backgroundColor: '#21c36b',
+                paddingVertical: 12,
+                paddingHorizontal: 16,
+                borderRadius: 12,
+                flexDirection: 'row',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: pressed ? 0.8 : 1,
+                shadowColor: '#000',
+                shadowOpacity: 0.1,
+                shadowRadius: 8,
+                shadowOffset: { width: 0, height: 2 },
+                elevation: 2,
+              })}
+            >
+              <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>
+                {t('profile.supportUs.button', '☕ Support Us')}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Header card */}
         <View
           style={{

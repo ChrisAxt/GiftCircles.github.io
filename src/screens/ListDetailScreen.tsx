@@ -11,6 +11,7 @@ import { Screen } from '../components/Screen';
 import TopBar from '../components/TopBar';
 import { formatPrice } from '../lib/currency';
 import { useUserCurrency } from '../hooks/useUserCurrency';
+import { requestClaimSplit } from '../lib/splitClaims';
 
 type Item = {
   id: string;
@@ -21,6 +22,7 @@ type Item = {
   notes?: string | null;
   created_at?: string;
   created_by?: string | null;
+  assigned_recipient_id?: string | null;
 };
 
 type Claim = { id: string; item_id: string; claimer_id: string; created_at?: string };
@@ -50,6 +52,13 @@ export default function ListDetailScreen({ route, navigation }: any) {
   const insets = useSafeAreaInsets();
   const [initialized, setInitialized] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [randomAssignmentEnabled, setRandomAssignmentEnabled] = useState(false);
+  const [randomAssignmentMode, setRandomAssignmentMode] = useState<string | null>(null);
+  const [randomAssignmentExecutedAt, setRandomAssignmentExecutedAt] = useState<string | null>(null);
+  const [isAssigning, setIsAssigning] = useState(false);
+  const [randomReceiverAssignmentEnabled, setRandomReceiverAssignmentEnabled] = useState(false);
+  const [isAssigningReceivers, setIsAssigningReceivers] = useState(false);
+  const [recipientNames, setRecipientNames] = useState<Record<string, string>>({});
 
   const load = useCallback(async () => {
     const firstLoad = !initialized;
@@ -79,7 +88,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
       // List
       const { data: listRow, error: listErr } = await supabase
         .from('lists')
-        .select('id,name,created_by,event_id')
+        .select('id,name,created_by,event_id,random_assignment_enabled,random_assignment_mode,random_assignment_executed_at,random_receiver_assignment_enabled')
         .eq('id', id)
         .maybeSingle();
       if (listErr) throw listErr;
@@ -90,15 +99,13 @@ export default function ListDetailScreen({ route, navigation }: any) {
         itemIdsRef.current = new Set();
         return;
       }
-      console.log('[ListDetail] List data:', {
-        listId: listRow.id,
-        created_by: listRow.created_by,
-        currentUserId: user.id,
-        isOwner: listRow.created_by === user.id
-      });
       setListName(listRow.name || t('listDetail.title'));
       setIsOwner(listRow.created_by === user.id);
       setListEventId(listRow.event_id);
+      setRandomAssignmentEnabled(listRow.random_assignment_enabled || false);
+      setRandomAssignmentMode(listRow.random_assignment_mode || null);
+      setRandomAssignmentExecutedAt(listRow.random_assignment_executed_at || null);
+      setRandomReceiverAssignmentEnabled(listRow.random_receiver_assignment_enabled || false);
 
       if (listRow?.event_id) {
         const [{ data: mem }, { data: ev }, { count: memberCount }] = await Promise.all([
@@ -128,7 +135,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
       // Items
       const { data: its, error: itemsErr } = await supabase
         .from('items')
-        .select('id,list_id,name,url,price,notes,created_at,created_by')
+        .select('id,list_id,name,url,price,notes,created_at,created_by,assigned_recipient_id')
         .eq('list_id', id)
         .order('created_at', { ascending: false });
       if (itemsErr) throw itemsErr;
@@ -171,7 +178,7 @@ export default function ListDetailScreen({ route, navigation }: any) {
         .maybeSingle();
       setIsRecipient(!!r);
 
-      // Names for “Claimed by: Name”
+      // Names for "Claimed by: Name" (support multiple claimers)
       const claimerIds = Array.from(
         new Set(Object.values(claimsMap).flat().map(c => c.claimer_id).filter(Boolean))
       ) as string[];
@@ -188,12 +195,62 @@ export default function ListDetailScreen({ route, navigation }: any) {
         const byItem: Record<string, string> = {};
         for (const [itemId, cl] of Object.entries(claimsMap)) {
           if (!cl?.length) continue;
-          const first = cl[0];
-          byItem[itemId] = nameById[first.claimer_id] || t('listDetail.item.someone');
+
+          // Separate current user from others
+          const youString = t('listDetail.item.you', 'You');
+          const otherNames: string[] = [];
+          let hasCurrentUser = false;
+
+          cl.forEach(c => {
+            if (c.claimer_id === user.id) {
+              hasCurrentUser = true;
+            } else {
+              otherNames.push(nameById[c.claimer_id] || t('listDetail.item.someone'));
+            }
+          });
+
+          // Build final name string with "You" always last
+          const allNames = hasCurrentUser ? [...otherNames, youString] : otherNames;
+
+          // Format names with "and" for multiple claimers
+          if (allNames.length === 1) {
+            byItem[itemId] = allNames[0];
+          } else if (allNames.length === 2) {
+            byItem[itemId] = allNames.join(` ${t('listDetail.item.and', 'and')} `);
+          } else {
+            const lastName = allNames[allNames.length - 1];
+            const restNames = allNames.slice(0, -1);
+            byItem[itemId] = `${restNames.join(', ')} ${t('listDetail.item.and', 'and')} ${lastName}`;
+          }
         }
         setClaimedByName(byItem);
       } else {
         setClaimedByName({});
+      }
+
+      // Fetch recipient names for items with assigned recipients
+      if (randomReceiverAssignmentEnabled) {
+        const recipientIds = Array.from(
+          new Set((its ?? []).map(i => i.assigned_recipient_id).filter(Boolean))
+        ) as string[];
+
+        if (recipientIds.length) {
+          const { data: recipientProfs, error: recipientErr } = await supabase
+            .from('profiles')
+            .select('id, display_name')
+            .in('id', recipientIds);
+          if (recipientErr) throw recipientErr;
+
+          const recipientNameById: Record<string, string> = {};
+          (recipientProfs ?? []).forEach(p => {
+            recipientNameById[p.id] = (p.display_name ?? '').trim() || 'Unknown';
+          });
+          setRecipientNames(recipientNameById);
+        } else {
+          setRecipientNames({});
+        }
+      } else {
+        setRecipientNames({});
       }
     } catch (e: any) {
       if (e?.name === 'AuthSessionMissingError') {
@@ -201,7 +258,6 @@ export default function ListDetailScreen({ route, navigation }: any) {
         stopIndicators();
         return;
       }
-      console.log('[ListDetail] load ERROR', e);
       setErrorMsg(t('listDetail.errors.load'));
       setIsOwner(false);
     } finally {
@@ -242,24 +298,77 @@ export default function ListDetailScreen({ route, navigation }: any) {
       if (rpcErr) {
         const msg = String(rpcErr.message || rpcErr);
         if (msg.includes('not_authorized')) {
-          toast.error(t('listDetail.errors.notAllowed'), t('listDetail.errors.cannotDeleteBody'));
+          toast.error(t('listDetail.errors.notAllowed'), { text2: t('listDetail.errors.cannotDeleteBody') });
         } else if (msg.includes('has_claims')) {
-          toast.info(t('listDetail.errors.hasClaimsTitle'), t('listDetail.errors.hasClaimsBody'));
+          toast.info(t('listDetail.errors.hasClaimsTitle'), { text2: t('listDetail.errors.hasClaimsBody') });
         } else if (msg.includes('not_found')) {
-          toast.info(t('listDetail.errors.alreadyGoneTitle'), t('listDetail.errors.alreadyGoneBody'));
+          toast.info(t('listDetail.errors.alreadyGoneTitle'), { text2: t('listDetail.errors.alreadyGoneBody') });
         } else {
-          toast.error(t('listDetail.errors.deleteFailed'), msg);
+          toast.error(t('listDetail.errors.deleteFailed'), { text2: msg });
         }
         await load();
         return;
       }
 
-      toast.success(t('listDetail.success.itemDeleted'));
+      toast.success(t('listDetail.success.itemDeleted'), {});
       await load();
     } catch (e: any) {
-      toast.error(t('listDetail.errors.deleteFailed'), e?.message ?? String(e));
+      toast.error(t('listDetail.errors.deleteFailed'), { text2: e?.message ?? String(e) });
     }
   }, [load, t]);
+
+  // Split request handler
+  const handleRequestSplit = useCallback((item: Item) => {
+    Alert.alert(
+      t('splitRequest.confirmTitle', 'Request to Split Claim?'),
+      t('splitRequest.confirmBody', { itemName: item.name }),
+      [
+        {
+          text: t('splitRequest.cancel', 'Cancel'),
+          style: 'cancel'
+        },
+        {
+          text: t('splitRequest.send', 'Send Request'),
+          onPress: async () => {
+            try {
+              await requestClaimSplit(item.id);
+              toast.success(
+                t('splitRequest.successTitle', 'Request Sent'),
+                { text2: t('splitRequest.successBody', 'Your split request has been sent!') }
+              );
+              load(); // Refresh to show updated claims
+            } catch (error: any) {
+              const msg = String(error.message || error);
+
+              if (msg.includes('Item is not claimed')) {
+                Alert.alert(
+                  t('splitRequest.errorTitle', 'Error'),
+                  t('splitRequest.notClaimedError', 'This item is not claimed yet')
+                );
+              } else if (msg.includes('Cannot request to split your own claim')) {
+                Alert.alert(
+                  t('splitRequest.errorTitle', 'Error'),
+                  t('splitRequest.ownClaimError', 'You cannot request to split your own claim')
+                );
+              } else if (msg.includes('You have already claimed this item')) {
+                Alert.alert(
+                  t('splitRequest.errorTitle', 'Error'),
+                  t('splitRequest.alreadyClaimedError', 'You have already claimed this item')
+                );
+              } else if (msg.includes('already have a pending split request')) {
+                Alert.alert(
+                  t('splitRequest.errorTitle', 'Error'),
+                  t('splitRequest.alreadyRequestedError', 'You already have a pending request for this item')
+                );
+              } else {
+                Alert.alert(t('splitRequest.errorTitle', 'Error'), msg);
+              }
+            }
+          }
+        }
+      ]
+    );
+  }, [t, load]);
 
   // realtime
   useEffect(() => {
@@ -280,11 +389,11 @@ export default function ListDetailScreen({ route, navigation }: any) {
       if (error) {
         const msg = String(error.message || error);
         if (msg.includes('not_authorized')) return toast.error(t('listDetail.errors.notAllowed'), { text2: t('listDetail.errors.cannotDeleteBody') });
-        if (msg.includes('not_found')) return toast.error(t('listDetail.errors.notFound'));
+        if (msg.includes('not_found')) return toast.error(t('listDetail.errors.notFound'), {});
         if (msg.includes('not_authenticated')) return toast.error(t('listDetail.errors.generic'), { text2: 'Please sign in and try again.' });
         return toast.error(t('listDetail.errors.deleteFailed'), { text2: msg });
       }
-      toast.success(t('listDetail.success.listDeleted'));
+      toast.success(t('listDetail.success.listDeleted'), {});
       navigation.goBack();
     } catch (e: any) {
       toast.error(t('listDetail.errors.deleteFailed'), { text2: e?.message ?? String(e) });
@@ -309,6 +418,226 @@ export default function ListDetailScreen({ route, navigation }: any) {
     );
   }, [doDelete, t]);
 
+  // Random receiver assignment handler
+  const handleRandomReceiverAssignment = useCallback(async () => {
+    if (!randomReceiverAssignmentEnabled) return;
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      if (Platform.OS === 'web') {
+        const ok = typeof window !== 'undefined'
+          ? window.confirm(`${t('listDetail.randomReceiverAssignment.confirmTitle')}\n${t('listDetail.randomReceiverAssignment.confirmBody')}`)
+          : true;
+        resolve(ok);
+      } else {
+        Alert.alert(
+          t('listDetail.randomReceiverAssignment.confirmTitle', 'Assign Recipients Randomly?'),
+          t('listDetail.randomReceiverAssignment.confirmBody', 'This will randomly assign a recipient to each item. Only givers will see who their item is for.'),
+          [
+            { text: t('eventList.alerts.cancel', 'Cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: t('listDetail.randomReceiverAssignment.assignButton', 'Assign'), onPress: () => resolve(true) },
+          ]
+        );
+      }
+    });
+
+    if (!confirmed) return;
+
+    setIsAssigningReceivers(true);
+    try {
+      const { error } = await supabase.rpc('execute_random_receiver_assignment', { p_list_id: id });
+
+      if (error) {
+        const msg = String(error.message || error);
+        if (msg.includes('Need at least 2 members')) {
+          toast.error(
+            t('listDetail.randomReceiverAssignment.errorTitle', 'Assignment Failed'),
+            { text2: t('listDetail.randomReceiverAssignment.needTwoMembers', 'Need at least 2 members to use random receiver assignment') }
+          );
+        } else if (msg.includes('not_authorized') || msg.includes('Only list creator or event admin')) {
+          toast.error(
+            t('listDetail.randomReceiverAssignment.errorTitle', 'Assignment Failed'),
+            { text2: t('listDetail.errors.notAllowed', 'Not allowed') }
+          );
+        } else if (msg.includes('No items in list')) {
+          toast.info(
+            t('listDetail.randomReceiverAssignment.noItems', 'No Items'),
+            { text2: t('listDetail.randomReceiverAssignment.noItemsBody', 'Add items to the list first') }
+          );
+        } else {
+          toast.error(t('listDetail.randomReceiverAssignment.errorTitle', 'Assignment Failed'), { text2: msg });
+        }
+        return;
+      }
+
+      toast.success(
+        t('listDetail.randomReceiverAssignment.successTitle', 'Recipients Assigned'),
+        { text2: t('listDetail.randomReceiverAssignment.successBody', 'Each item has been assigned to a random recipient') }
+      );
+
+      await load();
+    } catch (e: any) {
+      toast.error(t('listDetail.randomReceiverAssignment.errorTitle', 'Assignment Failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setIsAssigningReceivers(false);
+    }
+  }, [id, randomReceiverAssignmentEnabled, t, load]);
+
+  // Random assignment handler
+  const handleRandomAssignment = useCallback(async () => {
+    if (!randomAssignmentEnabled || !randomAssignmentMode) return;
+
+    const modeText = randomAssignmentMode === 'one_per_member'
+      ? t('listDetail.randomAssignment.modeOnePerMember', 'assign one item per member')
+      : t('listDetail.randomAssignment.modeDistributeAll', 'distribute all items evenly');
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      if (Platform.OS === 'web') {
+        const ok = typeof window !== 'undefined'
+          ? window.confirm(`${t('listDetail.randomAssignment.confirmTitle')}\n${t('listDetail.randomAssignment.confirmBody', { mode: modeText })}`)
+          : true;
+        resolve(ok);
+      } else {
+        Alert.alert(
+          t('listDetail.randomAssignment.confirmTitle', 'Assign Items Randomly?'),
+          t('listDetail.randomAssignment.confirmBody', { mode: modeText }),
+          [
+            { text: t('eventList.alerts.cancel', 'Cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: t('listDetail.randomAssignment.assignButton', 'Assign'), onPress: () => resolve(true) },
+          ]
+        );
+      }
+    });
+
+    if (!confirmed) return;
+
+    setIsAssigning(true);
+    try {
+      const { data, error } = await supabase.rpc('assign_items_randomly', { p_list_id: id });
+
+      if (error) {
+        const msg = String(error.message || error);
+        if (msg.includes('no_available_members')) {
+          toast.error(
+            t('listDetail.randomAssignment.errorTitle', 'Assignment Failed'),
+            { text2: t('listDetail.randomAssignment.noMembers', 'No available members to assign items to') }
+          );
+        } else if (msg.includes('not_authorized')) {
+          toast.error(
+            t('listDetail.randomAssignment.errorTitle', 'Assignment Failed'),
+            { text2: t('listDetail.errors.notAllowed', 'Not allowed') }
+          );
+        } else {
+          toast.error(t('listDetail.randomAssignment.errorTitle', 'Assignment Failed'), { text2: msg });
+        }
+        return;
+      }
+
+      const result = data as any;
+      if (result.assignments_made === 0) {
+        toast.info(
+          t('listDetail.randomAssignment.noNewItems', 'No New Items'),
+          { text2: t('listDetail.randomAssignment.noItemsToAssign', 'All items have already been assigned') }
+        );
+      } else {
+        toast.success(
+          t('listDetail.randomAssignment.successTitle', 'Items Assigned'),
+          { text2: t('listDetail.randomAssignment.successBody', { count: result.assignments_made, memberCount: result.member_count }) }
+        );
+      }
+
+      await load();
+    } catch (e: any) {
+      toast.error(t('listDetail.randomAssignment.errorTitle', 'Assignment Failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setIsAssigning(false);
+    }
+  }, [id, randomAssignmentEnabled, randomAssignmentMode, t, load]);
+
+  // Combined assignment handler (when both features are enabled)
+  const handleCombinedAssignment = useCallback(async () => {
+    if (!randomAssignmentEnabled || !randomReceiverAssignmentEnabled || !randomAssignmentMode) return;
+
+    const modeText = randomAssignmentMode === 'one_per_member'
+      ? t('listDetail.randomAssignment.modeOnePerMember', 'assign one item per member')
+      : t('listDetail.randomAssignment.modeDistributeAll', 'distribute all items evenly');
+
+    const message = t('listDetail.combinedAssignment.confirmBody', {
+      defaultValue: 'This will:\n\n1. Randomly assign items to members ({{mode}})\n2. Randomly assign a recipient to each item\n\nOnly givers will see their assigned items and who they\'re for.',
+      mode: modeText
+    });
+
+    const confirmed = await new Promise<boolean>((resolve) => {
+      if (Platform.OS === 'web') {
+        const ok = typeof window !== 'undefined'
+          ? window.confirm(`${t('listDetail.combinedAssignment.confirmTitle', 'Assign Items & Recipients?')}\n${message}`)
+          : true;
+        resolve(ok);
+      } else {
+        Alert.alert(
+          t('listDetail.combinedAssignment.confirmTitle', 'Assign Items & Recipients?'),
+          message,
+          [
+            { text: t('eventList.alerts.cancel', 'Cancel'), style: 'cancel', onPress: () => resolve(false) },
+            { text: t('listDetail.combinedAssignment.assignButton', 'Assign Both'), onPress: () => resolve(true) },
+          ]
+        );
+      }
+    });
+
+    if (!confirmed) return;
+
+    setIsAssigning(true);
+    setIsAssigningReceivers(true);
+    try {
+      // First assign items to givers
+      const { data: itemData, error: itemError } = await supabase.rpc('assign_items_randomly', { p_list_id: id });
+      if (itemError) {
+        throw itemError;
+      }
+
+      // Then assign recipients to items
+      const { error: receiverError } = await supabase.rpc('execute_random_receiver_assignment', { p_list_id: id });
+      if (receiverError) {
+        throw receiverError;
+      }
+
+      const result = itemData as any;
+      toast.success(
+        t('listDetail.combinedAssignment.successTitle', 'Assignment Complete'),
+        { text2: t('listDetail.combinedAssignment.successBody', {
+          defaultValue: 'Assigned {{count}} items to {{memberCount}} members and assigned recipients to all items',
+          count: result.assignments_made,
+          memberCount: result.member_count
+        }) }
+      );
+
+      await load();
+    } catch (e: any) {
+      const msg = String(e.message || e);
+      if (msg.includes('no_available_members')) {
+        toast.error(
+          t('listDetail.combinedAssignment.errorTitle', 'Assignment Failed'),
+          { text2: t('listDetail.randomAssignment.noMembers', 'No available members to assign items to') }
+        );
+      } else if (msg.includes('Need at least 2 members')) {
+        toast.error(
+          t('listDetail.combinedAssignment.errorTitle', 'Assignment Failed'),
+          { text2: t('listDetail.randomReceiverAssignment.needTwoMembers', 'Need at least 2 members to use random receiver assignment') }
+        );
+      } else if (msg.includes('not_authorized')) {
+        toast.error(
+          t('listDetail.combinedAssignment.errorTitle', 'Assignment Failed'),
+          { text2: t('listDetail.errors.notAllowed', 'Not allowed') }
+        );
+      } else {
+        toast.error(t('listDetail.combinedAssignment.errorTitle', 'Assignment Failed'), { text2: msg });
+      }
+    } finally{
+      setIsAssigning(false);
+      setIsAssigningReceivers(false);
+    }
+  }, [id, randomAssignmentEnabled, randomReceiverAssignmentEnabled, randomAssignmentMode, t, load]);
+
   // focus load
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
@@ -332,20 +661,66 @@ export default function ListDetailScreen({ route, navigation }: any) {
   }
 
   const canDeleteList = isOwner || isAdmin || eventMemberCount === 1;
+  const canAssign = randomAssignmentEnabled && (isOwner || isAdmin);
+  const canAssignReceivers = randomReceiverAssignmentEnabled && (isOwner || isAdmin);
+  const hasBothAssignments = canAssign && canAssignReceivers;
 
   return (
-    <Screen>
+    <Screen noPaddingBottom>
       <TopBar
         title={listName || t('listDetail.screenTitle', 'List')}
         right={
-          canDeleteList ? (
+          canDeleteList || canAssign || canAssignReceivers ? (
             <View style={{ flexDirection: 'row' }}>
-              <Pressable onPress={() => navigation.navigate('EditList', { listId: id })} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-                <Text style={{ color: '#2e95f1', fontWeight: '700' }}>Edit</Text>
-              </Pressable>
-              <Pressable onPress={confirmDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
-                <Text style={{ color: '#d9534f', fontWeight: '700' }}>{t('listDetail.actions.delete')}</Text>
-              </Pressable>
+              {hasBothAssignments ? (
+                // Show one combined button when both features are enabled
+                <Pressable
+                  onPress={handleCombinedAssignment}
+                  disabled={isAssigning || isAssigningReceivers}
+                  style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+                >
+                  <Text style={{ color: (isAssigning || isAssigningReceivers) ? '#999' : '#9333ea', fontWeight: '700' }}>
+                    {(isAssigning || isAssigningReceivers)
+                      ? t('listDetail.combinedAssignment.assigning', 'Assigning...')
+                      : t('listDetail.combinedAssignment.assignButton', 'Assign')}
+                  </Text>
+                </Pressable>
+              ) : (
+                <>
+                  {canAssign && (
+                    <Pressable
+                      onPress={handleRandomAssignment}
+                      disabled={isAssigning}
+                      style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+                    >
+                      <Text style={{ color: isAssigning ? '#999' : '#10b981', fontWeight: '700' }}>
+                        {isAssigning ? t('listDetail.randomAssignment.assigning', 'Assigning...') : t('listDetail.randomAssignment.assignButton', 'Assign')}
+                      </Text>
+                    </Pressable>
+                  )}
+                  {canAssignReceivers && (
+                    <Pressable
+                      onPress={handleRandomReceiverAssignment}
+                      disabled={isAssigningReceivers}
+                      style={{ paddingHorizontal: 12, paddingVertical: 6 }}
+                    >
+                      <Text style={{ color: isAssigningReceivers ? '#999' : '#f59e0b', fontWeight: '700' }}>
+                        {isAssigningReceivers ? t('listDetail.randomReceiverAssignment.assigning', 'Assigning...') : t('listDetail.randomReceiverAssignment.assignButton', 'Assign Recipients')}
+                      </Text>
+                    </Pressable>
+                  )}
+                </>
+              )}
+              {canDeleteList && (
+                <>
+                  <Pressable onPress={() => navigation.navigate('EditList', { listId: id })} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text style={{ color: '#2e95f1', fontWeight: '700' }}>Edit</Text>
+                  </Pressable>
+                  <Pressable onPress={confirmDelete} style={{ paddingHorizontal: 12, paddingVertical: 6 }}>
+                    <Text style={{ color: '#d9534f', fontWeight: '700' }}>{t('listDetail.actions.delete')}</Text>
+                  </Pressable>
+                </>
+              )}
             </View>
           ) : null
         }
@@ -435,16 +810,51 @@ export default function ListDetailScreen({ route, navigation }: any) {
                   <Text style={{ marginTop: 4, color: colors.text, opacity: 0.8, fontStyle: 'italic' }}>{item.notes}</Text>
                 ) : null}
 
-                {/* Claim info & button (recipients can't see claimers) */}
-                {!isRecipient ? (
+                {/* Recipient assignment info (only show to givers) */}
+                {randomReceiverAssignmentEnabled && item.assigned_recipient_id && claims.some(c => c.claimer_id === myUserId) && (
+                  <View style={{ marginTop: 8, padding: 8, backgroundColor: 'rgba(245, 158, 11, 0.1)', borderRadius: 8, borderLeftWidth: 3, borderLeftColor: '#f59e0b' }}>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }}>
+                      {t('listDetail.item.forRecipient', 'This gift is for: ')}
+                      <Text style={{ fontWeight: '700', color: '#f59e0b' }}>
+                        {recipientNames[item.assigned_recipient_id] || 'Unknown'}
+                      </Text>
+                    </Text>
+                  </View>
+                )}
+
+                {/* Claim info & button */}
+                {/* In collaborative mode (both random features), everyone can see claims */}
+                {/* In other modes, recipients can't see claimers */}
+                {(!isRecipient || (randomAssignmentEnabled && randomReceiverAssignmentEnabled)) ? (
                   <View style={{ marginTop: 10, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}>
                     <Text style={{ opacity: 0.7, color: colors.text }}>
                       {(() => {
-                        const mine = myUserId ? claims.some(c => c.claimer_id === myUserId) : false;
                         if (!claims.length) return t('listDetail.item.notClaimed');
-                        return mine
-                          ? t('listDetail.item.claimedByYou')
-                          : t('listDetail.item.claimedByName', { name: claimedByName[item.id] ?? t('listDetail.item.someone') });
+
+                        // For random assignment: show "You" if you claimed it, otherwise "hidden"
+                        if (randomAssignmentEnabled) {
+                          const iClaimedIt = claims.some(c => c.claimer_id === myUserId);
+                          if (iClaimedIt) {
+                            return t('listDetail.item.claimedByYou', 'Claimed by: You');
+                          }
+                          return t('listDetail.item.claimedByHidden', 'Claimed by: hidden');
+                        }
+
+                        const claimerNames = claimedByName[item.id];
+                        if (!claimerNames) return t('listDetail.item.notClaimed');
+
+                        // Check if "You" is in the names (single or multiple)
+                        const hasYou = claimerNames.includes(t('listDetail.item.you', 'You'));
+
+                        // If single claim
+                        if (claims.length === 1) {
+                          return hasYou
+                            ? t('listDetail.item.claimedByYou')
+                            : t('listDetail.item.claimedByName', { name: claimerNames });
+                        }
+
+                        // If multiple claims (split claim), show full formatted names
+                        return t('listDetail.item.claimedByName', { name: claimerNames });
                       })()}
                     </Text>
 
@@ -453,6 +863,9 @@ export default function ListDetailScreen({ route, navigation }: any) {
                       claims={claimsByItem[item.id] ?? []}
                       meId={myUserId}
                       onChanged={load}
+                      isRandomAssignment={randomAssignmentEnabled}
+                      isAssignedToMe={randomAssignmentEnabled && claims.some(c => c.claimer_id === myUserId)}
+                      onRequestSplit={() => handleRequestSplit(item)}
                     />
                   </View>
                 ) : (

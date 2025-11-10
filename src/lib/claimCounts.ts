@@ -12,16 +12,15 @@ import { supabase } from './supabase';
 export async function fetchClaimCountsByList(listIds: string[]): Promise<Record<string, number>> {
   if (!listIds?.length) return {};
 
-  // ---- (1) Optional RPC path (tolerant to different return shapes)
+  // ---- (1) Optimized RPC path (uses materialized stats)
   try {
-    // If you have an RPC like claimed_counts_by_list(p_list_ids uuid[])
-    const { data, error } = await supabase.rpc('claimed_counts_by_list', { p_list_ids: listIds });
+    const { data, error } = await supabase.rpc('get_claim_counts_by_list', { p_list_ids: listIds });
     if (!error && Array.isArray(data)) {
       const out: Record<string, number> = {};
       for (const row of data as any[]) {
         const listId = row.list_id || row.id || row.list || row.listId;
         const count =
-          Number(row.claimed ?? row.claimed_count ?? row.count ?? row.cnt ?? 0);
+          Number(row.claimed_count ?? row.claimed ?? row.count ?? row.cnt ?? 0);
         if (listId) out[listId] = count;
       }
       // If it looks like a real result, use it.

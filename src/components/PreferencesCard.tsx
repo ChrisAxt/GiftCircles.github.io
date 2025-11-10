@@ -26,15 +26,21 @@ export default function PreferencesCard() {
   const [currencyCode, setCurrencyCode] = useState<string>('USD');
   const [currencyOpen, setCurrencyOpen] = useState(false);
   const [loadingCurrency, setLoadingCurrency] = useState(false);
+  const [digestEnabled, setDigestEnabled] = useState<boolean>(false);
+  const [digestHour, setDigestHour] = useState<number>(9);
+  const [digestFrequency, setDigestFrequency] = useState<'daily' | 'weekly'>('daily');
+  const [digestDayOfWeek, setDigestDayOfWeek] = useState<number>(1);
+  const [loadingDigest, setLoadingDigest] = useState(false);
   const { t, i18n } = useTranslation();
 
-  // Load cached push state, reminder preference, and currency
+  // Load cached push state, reminder preference, currency, and digest
   React.useEffect(() => {
     (async () => {
       const pushValue = await AsyncStorage.getItem('pref.pushEnabled');
       setPushEnabled(pushValue === '1');
       await loadReminderDays();
       await loadCurrency();
+      await loadDigestPreferences();
     })();
   }, []);
 
@@ -53,7 +59,7 @@ export default function PreferencesCard() {
         setReminderDays(data.reminder_days);
       }
     } catch (e) {
-      console.error('Failed to load reminder days:', e);
+      // Error loading reminder days
     }
   };
 
@@ -77,7 +83,29 @@ export default function PreferencesCard() {
         await updateCurrency(detected);
       }
     } catch (e) {
-      console.error('Failed to load currency:', e);
+      // Error loading currency
+    }
+  };
+
+  const loadDigestPreferences = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('notification_digest_enabled, digest_time_hour, digest_frequency, digest_day_of_week')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (data) {
+        setDigestEnabled(data.notification_digest_enabled ?? false);
+        setDigestHour(data.digest_time_hour ?? 9);
+        setDigestFrequency(data.digest_frequency ?? 'daily');
+        setDigestDayOfWeek(data.digest_day_of_week ?? 1);
+      }
+    } catch (e) {
+      // Error loading digest preferences
     }
   };
   const setPushLocal = async (b: boolean) => {
@@ -106,35 +134,30 @@ export default function PreferencesCard() {
   const onTogglePush = async () => {
     if (working) return;
     if (inExpoGo) {
-      Alert.alert('Not available in Expo Go', 'Install a development build to enable remote push notifications.');
+      Alert.alert(t('profile.settings.pushNotAvailableTitle'), t('profile.settings.pushNotAvailableBody'));
       return;
     }
     setWorking(true);
     try {
       if (!pushEnabled) {
-        console.log('[Push] Attempting to register...');
         const token = await ensurePushRegistered();
-        console.log('[Push] Got token:', token);
         if (!token) {
-          Alert.alert('Permission needed', 'Enable notifications in system settings to receive alerts.');
+          Alert.alert(t('profile.settings.pushPermissionTitle'), t('profile.settings.pushPermissionBody'));
           setWorking(false);
           return;
         }
         await AsyncStorage.setItem('pref.pushToken', token);
-        console.log('[Push] Saving to DB...');
         await savePushTokenToDb(token);
-        console.log('[Push] Saved successfully');
         await setPushLocal(true);
-        toast.success('Notifications enabled');
+        toast.success(t('profile.settings.pushEnabled'));
       } else {
         await removePushTokenFromDb();
         await AsyncStorage.removeItem('pref.pushToken');
         await setPushLocal(false);
-        toast.info('Notifications disabled');
+        toast.info(t('profile.settings.pushDisabled'));
       }
     } catch (error) {
-      console.error('[Push] Toggle error:', error);
-      Alert.alert('Error', String(error));
+      Alert.alert(t('profile.settings.pushError'), String(error));
     } finally {
       setWorking(false);
     }
@@ -203,10 +226,9 @@ export default function PreferencesCard() {
       if (error) throw error;
 
       setReminderDays(days);
-      toast.success('Reminder preference updated');
+      toast.success(t('profile.settings.reminderUpdated'));
     } catch (e: any) {
-      console.error('Failed to update reminder days:', e);
-      toast.error('Update failed', e?.message ?? String(e));
+      toast.error(t('profile.settings.updateFailed'), e?.message ?? String(e));
     } finally {
       setLoadingReminder(false);
     }
@@ -230,10 +252,102 @@ export default function PreferencesCard() {
       setCurrencyOpen(false);
       toast.success(t('profile.settings.currencyUpdated', 'Currency preference updated'));
     } catch (e: any) {
-      console.error('Failed to update currency:', e);
       toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
     } finally {
       setLoadingCurrency(false);
+    }
+  };
+
+  const toggleDigest = async () => {
+    if (loadingDigest) return;
+    setLoadingDigest(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const newValue = !digestEnabled;
+      const { error } = await supabase
+        .from('profiles')
+        .update({ notification_digest_enabled: newValue })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setDigestEnabled(newValue);
+      toast.success(t('profile.settings.digestUpdated', 'Daily digest preference updated'));
+    } catch (e: any) {
+      toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setLoadingDigest(false);
+    }
+  };
+
+  const updateDigestHour = async (hour: number) => {
+    if (loadingDigest) return;
+    setLoadingDigest(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ digest_time_hour: hour })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setDigestHour(hour);
+      toast.success(t('profile.settings.digestTimeUpdated', 'Digest time updated'));
+    } catch (e: any) {
+      toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setLoadingDigest(false);
+    }
+  };
+
+  const updateDigestFrequency = async (frequency: 'daily' | 'weekly') => {
+    if (loadingDigest) return;
+    setLoadingDigest(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ digest_frequency: frequency })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setDigestFrequency(frequency);
+      toast.success(t('profile.settings.digestFrequencyUpdated', 'Digest frequency updated'));
+    } catch (e: any) {
+      toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setLoadingDigest(false);
+    }
+  };
+
+  const updateDigestDayOfWeek = async (day: number) => {
+    if (loadingDigest) return;
+    setLoadingDigest(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ digest_day_of_week: day })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setDigestDayOfWeek(day);
+      toast.success(t('profile.settings.digestDayUpdated', 'Digest day updated'));
+    } catch (e: any) {
+      toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setLoadingDigest(false);
     }
   };
 
@@ -272,7 +386,7 @@ export default function PreferencesCard() {
             }}
           >
             <Text style={{ color: pushEnabled ? '#fff' : colors.text, fontWeight: '700' }}>
-              {inExpoGo ? 'Use dev build' : pushEnabled ? 'On' : 'Off'}
+              {inExpoGo ? t('profile.settings.pushUseDevBuild') : pushEnabled ? t('profile.common.on') : t('profile.common.off')}
             </Text>
           </Pressable>
         </View>
@@ -288,14 +402,87 @@ export default function PreferencesCard() {
             {t('profile.settings.purchaseRemindersDesc', 'Get notified to purchase claimed items before events')}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            <Chip active={reminderDays === 0} label={t('profile.common.off', 'Off')} onPress={() => updateReminderDays(0)} />
-            <Chip active={reminderDays === 1} label={t('profile.common.1day', '1 day')} onPress={() => updateReminderDays(1)} />
-            <Chip active={reminderDays === 3} label={t('profile.common.3days', '3 days')} onPress={() => updateReminderDays(3)} />
-            <Chip active={reminderDays === 7} label={t('profile.common.7days', '7 days')} onPress={() => updateReminderDays(7)} />
-            <Chip active={reminderDays === 14} label={t('profile.common.14days', '14 days')} onPress={() => updateReminderDays(14)} />
+            <Chip active={reminderDays === 0} label={t('profile.common.off')} onPress={() => updateReminderDays(0)} />
+            <Chip active={reminderDays === 1} label={t('profile.common.1day')} onPress={() => updateReminderDays(1)} />
+            <Chip active={reminderDays === 3} label={t('profile.common.3days')} onPress={() => updateReminderDays(3)} />
+            <Chip active={reminderDays === 7} label={t('profile.common.7days')} onPress={() => updateReminderDays(7)} />
+            <Chip active={reminderDays === 14} label={t('profile.common.14days')} onPress={() => updateReminderDays(14)} />
           </View>
         </View>
       )}
+
+      {/* Activity Digest */}
+      <View style={{ marginTop: 12 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontWeight: '600', color: colors.text }}>
+            {t('profile.settings.activityDigest', 'Activity Digest')}
+          </Text>
+          <Pressable
+            onPress={toggleDigest}
+            disabled={loadingDigest}
+            style={{
+              backgroundColor: digestEnabled ? '#2e95f1' : colors.card,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              minWidth: 70,
+              alignItems: 'center',
+              opacity: loadingDigest ? 0.7 : 1,
+              borderWidth: digestEnabled ? 0 : 1,
+              borderColor: digestEnabled ? 'transparent' : colors.border,
+            }}
+          >
+            <Text style={{ color: digestEnabled ? '#fff' : colors.text, fontWeight: '700' }}>
+              {digestEnabled ? t('profile.common.on') : t('profile.common.off')}
+            </Text>
+          </Pressable>
+        </View>
+        <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
+          {t('profile.settings.activityDigestDesc', 'Receive a summary of activity in your events')}
+        </Text>
+        {digestEnabled && (
+          <>
+            {/* Frequency selector */}
+            <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 6, color: colors.text }}>
+              {t('profile.settings.digestFrequency', 'Frequency')}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 }}>
+              <Chip active={digestFrequency === 'daily'} label={t('profile.settings.daily', 'Daily')} onPress={() => updateDigestFrequency('daily')} />
+              <Chip active={digestFrequency === 'weekly'} label={t('profile.settings.weekly', 'Weekly')} onPress={() => updateDigestFrequency('weekly')} />
+            </View>
+
+            {/* Day of week selector (only for weekly) */}
+            {digestFrequency === 'weekly' && (
+              <>
+                <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 6, color: colors.text }}>
+                  {t('profile.settings.digestDay', 'Day')}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', marginBottom: 12 }}>
+                  <Chip active={digestDayOfWeek === 1} label={t('profile.common.monday', 'Mon')} onPress={() => updateDigestDayOfWeek(1)} />
+                  <Chip active={digestDayOfWeek === 2} label={t('profile.common.tuesday', 'Tue')} onPress={() => updateDigestDayOfWeek(2)} />
+                  <Chip active={digestDayOfWeek === 3} label={t('profile.common.wednesday', 'Wed')} onPress={() => updateDigestDayOfWeek(3)} />
+                  <Chip active={digestDayOfWeek === 4} label={t('profile.common.thursday', 'Thu')} onPress={() => updateDigestDayOfWeek(4)} />
+                  <Chip active={digestDayOfWeek === 5} label={t('profile.common.friday', 'Fri')} onPress={() => updateDigestDayOfWeek(5)} />
+                  <Chip active={digestDayOfWeek === 6} label={t('profile.common.saturday', 'Sat')} onPress={() => updateDigestDayOfWeek(6)} />
+                  <Chip active={digestDayOfWeek === 0} label={t('profile.common.sunday', 'Sun')} onPress={() => updateDigestDayOfWeek(0)} />
+                </View>
+              </>
+            )}
+
+            {/* Time selector */}
+            <Text style={{ fontSize: 12, fontWeight: '600', marginBottom: 6, color: colors.text }}>
+              {t('profile.settings.digestTime', 'Delivery Time')}
+            </Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+              <Chip active={digestHour === 7} label="7:00" onPress={() => updateDigestHour(7)} />
+              <Chip active={digestHour === 9} label="9:00" onPress={() => updateDigestHour(9)} />
+              <Chip active={digestHour === 12} label="12:00" onPress={() => updateDigestHour(12)} />
+              <Chip active={digestHour === 18} label="18:00" onPress={() => updateDigestHour(18)} />
+              <Chip active={digestHour === 20} label="20:00" onPress={() => updateDigestHour(20)} />
+            </View>
+          </>
+        )}
+      </View>
 
       {/* Appearance */}
       <View style={{ marginTop: 12 }}>
@@ -365,7 +552,7 @@ export default function PreferencesCard() {
                 onPress={() => setLangOpen(false)}
                 style={{ padding: 14, alignItems: 'center', borderTopWidth: 1, borderColor: colors.border }}
               >
-                <Text style={{ fontWeight: '700', color: '#2e95f1' }}>OK</Text>
+                <Text style={{ fontWeight: '700', color: '#2e95f1' }}>{t('profile.common.ok')}</Text>
               </Pressable>
             </Pressable>
           </Pressable>
@@ -426,7 +613,7 @@ export default function PreferencesCard() {
                 onPress={() => setCurrencyOpen(false)}
                 style={{ padding: 14, alignItems: 'center', borderTopWidth: 1, borderColor: colors.border }}
               >
-                <Text style={{ fontWeight: '700', color: '#2e95f1' }}>OK</Text>
+                <Text style={{ fontWeight: '700', color: '#2e95f1' }}>{t('profile.common.ok')}</Text>
               </Pressable>
             </Pressable>
           </Pressable>
@@ -504,13 +691,10 @@ async function ensurePushRegistered(): Promise<string | null> {
 
   try {
     const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    console.log('[Push] Expo token obtained:', token.data);
     return token.data || null;
   } catch (error) {
-    console.error('[Push] Failed to get Expo token:', error);
     // Fallback: try to get device push token (FCM token for Android)
     const deviceToken = (await Notifications.getDevicePushTokenAsync()).data;
-    console.log('[Push] Using device token instead:', deviceToken);
     return deviceToken || null;
   }
 }

@@ -27,7 +27,7 @@ export const useUserCurrency = (): string => {
           setCurrency(data.currency);
         }
       } catch (e) {
-        console.error('Failed to load currency:', e);
+        // Error loading currency
       }
     })();
 

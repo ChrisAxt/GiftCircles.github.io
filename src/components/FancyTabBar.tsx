@@ -1,11 +1,11 @@
 import React from 'react';
 import { View, Pressable, Text } from 'react-native';
-import type { BottomTabBarProps } from '@react-navigation/bottom-tabs';
+import type { MaterialTopTabBarProps } from '@react-navigation/material-top-tabs';
 import { MaterialCommunityIcons, Feather } from '@expo/vector-icons';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 
-export default function FancyTabBar({ state, descriptors, navigation }: BottomTabBarProps) {
+export default function FancyTabBar({ state, descriptors, navigation }: MaterialTopTabBarProps) {
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
 

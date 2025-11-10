@@ -1,6 +1,6 @@
 // src/screens/CreateEventScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, Pressable, Platform, Alert } from 'react-native';
+import { View, Text, Pressable, Platform, Alert, TextInput, ScrollView } from 'react-native';
 import DateTimePicker, { DateTimePickerEvent } from '@react-native-community/datetimepicker';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -11,6 +11,7 @@ import { Screen } from '../components/Screen';
 import { useTheme } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
 import { useSettings } from '../theme/SettingsProvider';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 const MAX_FREE_EVENTS = 3;
 
@@ -34,6 +35,7 @@ export default function CreateEventScreen({ navigation }: any) {
   const { t } = useTranslation();
   const { colors } = useTheme();
   const { themePref } = useSettings();
+  const insets = useSafeAreaInsets();
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState(''); // optional
@@ -42,10 +44,42 @@ export default function CreateEventScreen({ navigation }: any) {
   const [loading, setLoading] = useState(false);
   const [recurrence, setRecurrence] =
     useState<'none' | 'weekly' | 'monthly' | 'yearly'>('none');
+  const [adminOnlyInvites, setAdminOnlyInvites] = useState(false);
+  const [adminEmails, setAdminEmails] = useState<string[]>([]);
+  const [adminEmailInput, setAdminEmailInput] = useState('');
 
   const onChangeDate = (_: DateTimePickerEvent, selected?: Date) => {
     if (Platform.OS === 'android') setShowPicker(false);
     if (selected) setEventDate(selected);
+  };
+
+  const addAdminEmail = () => {
+    const email = adminEmailInput.trim().toLowerCase();
+    if (!email) return;
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      return toast.error(
+        t('createEvent.invalidEmailTitle', 'Invalid Email'),
+        { text2: t('createEvent.invalidEmailBody', 'Please enter a valid email address') }
+      );
+    }
+
+    // Check for duplicates
+    if (adminEmails.includes(email)) {
+      return toast.info(
+        t('createEvent.duplicateEmailTitle', 'Already Added'),
+        { text2: t('createEvent.duplicateEmailBody', 'This email is already in the list') }
+      );
+    }
+
+    setAdminEmails([...adminEmails, email]);
+    setAdminEmailInput('');
+  };
+
+  const removeAdminEmail = (email: string) => {
+    setAdminEmails(adminEmails.filter(e => e !== email));
   };
 
   // Tries to read Pro status via RPC if present. Safe fallbacks if it doesn’t exist.
@@ -105,19 +139,18 @@ export default function CreateEventScreen({ navigation }: any) {
 
       const p_event_date = eventDate ? toPgDate(eventDate) : null;
 
-      console.log('[CreateEvent] Calling create_event_and_admin RPC for user:', user.id);
       const { data: newId, error: rpcErr } = await supabase.rpc('create_event_and_admin', {
         p_title: title.trim(),
         p_event_date,
         p_recurrence: recurrence,
         p_description: description.trim() || null,
+        p_admin_only_invites: adminOnlyInvites,
+        p_admin_emails: adminEmails,
       });
 
       if (rpcErr) {
-        console.log('[CreateEvent] RPC error:', JSON.stringify(rpcErr, null, 2));
         // Handle free limit error with Alert
         if (isFreeLimitError(rpcErr)) {
-          console.log('[CreateEvent] Free limit error detected');
           const errorDetails = parseSupabaseError(rpcErr, t);
           Alert.alert(errorDetails.title, errorDetails.message);
           setLoading(false);
@@ -127,13 +160,11 @@ export default function CreateEventScreen({ navigation }: any) {
       }
       if (!newId) throw new Error('RPC returned no id');
 
-      console.log('[CreateEvent] Event created successfully:', newId);
-      toast.success(t('createEvent.toastCreated'));
+      toast.success(t('createEvent.toastCreated'), {});
       navigation.replace('EventDetail', { id: newId as string });
     } catch (err: any) {
-      console.log('[CreateEvent] ERROR', err);
       const errorDetails = parseSupabaseError(err, t);
-      toast.error(errorDetails.title, errorDetails.message);
+      toast.error(errorDetails.title, { text2: errorDetails.message });
     } finally {
       setLoading(false);
     }
@@ -142,7 +173,7 @@ export default function CreateEventScreen({ navigation }: any) {
   return (
     <Screen>
       <TopBar title={t('createEvent.screenTitle', 'Create Event')} />
-      <View style={{ padding: 16 }}>
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: insets.bottom + 40 }}>
         <LabeledInput
           label={t('createEvent.titleLabel')}
           placeholder={t('createEvent.titlePlaceholder')}
@@ -228,6 +259,127 @@ export default function CreateEventScreen({ navigation }: any) {
           </View>
         </View>
 
+        {/* Admin-only invites toggle */}
+        <View
+          style={{
+            backgroundColor: colors.card,
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            marginTop: 12,
+          }}
+        >
+          <Pressable
+            onPress={() => setAdminOnlyInvites(!adminOnlyInvites)}
+            style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
+          >
+            <View style={{ flex: 1, marginRight: 12 }}>
+              <Text style={{ fontWeight: '600', marginBottom: 4, color: colors.text }}>
+                {t('createEvent.adminOnlyInvitesLabel', 'Restrict Invites to Admins')}
+              </Text>
+              <Text style={{ fontSize: 12, opacity: 0.7, color: colors.text }}>
+                {t('createEvent.adminOnlyInvitesDesc', 'Only admins can invite new members to this event')}
+              </Text>
+            </View>
+            <View
+              style={{
+                width: 24,
+                height: 24,
+                borderRadius: 4,
+                borderWidth: 2,
+                borderColor: adminOnlyInvites ? '#2e95f1' : colors.border,
+                backgroundColor: adminOnlyInvites ? '#2e95f1' : 'transparent',
+                alignItems: 'center',
+                justifyContent: 'center',
+              }}
+            >
+              {adminOnlyInvites && (
+                <Text style={{ color: 'white', fontWeight: '900', fontSize: 16 }}>✓</Text>
+              )}
+            </View>
+          </Pressable>
+        </View>
+
+        {/* Additional Admins */}
+        <View
+          style={{
+            backgroundColor: colors.card,
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: colors.border,
+            marginTop: 12,
+          }}
+        >
+          <Text style={{ fontWeight: '600', marginBottom: 4, color: colors.text }}>
+            {t('createEvent.adminEmailsLabel', 'Additional Admins (optional)')}
+          </Text>
+          <Text style={{ fontSize: 12, opacity: 0.7, marginBottom: 8, color: colors.text }}>
+            {t('createEvent.adminEmailsDesc', 'Add email addresses of people who should be admins')}
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+            <TextInput
+              style={{
+                flex: 1,
+                borderWidth: 1,
+                borderColor: colors.border,
+                borderRadius: 8,
+                padding: 8,
+                backgroundColor: colors.background,
+                color: colors.text,
+                fontSize: 14,
+              }}
+              placeholder={t('createEvent.adminEmailPlaceholder', 'admin@example.com')}
+              placeholderTextColor={colors.text + '80'}
+              value={adminEmailInput}
+              onChangeText={setAdminEmailInput}
+              keyboardType="email-address"
+              autoCapitalize="none"
+              autoCorrect={false}
+              onSubmitEditing={addAdminEmail}
+            />
+            <Pressable
+              onPress={addAdminEmail}
+              style={{
+                backgroundColor: '#2e95f1',
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                justifyContent: 'center',
+              }}
+            >
+              <Text style={{ color: '#fff', fontWeight: '700' }}>
+                {t('createEvent.addAdmin', 'Add')}
+              </Text>
+            </Pressable>
+          </View>
+
+          {adminEmails.length > 0 && (
+            <View style={{ gap: 6 }}>
+              {adminEmails.map((email) => (
+                <View
+                  key={email}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    backgroundColor: colors.background,
+                    padding: 8,
+                    borderRadius: 6,
+                  }}
+                >
+                  <Text style={{ color: colors.text, fontSize: 13 }}>{email}</Text>
+                  <Pressable onPress={() => removeAdminEmail(email)} hitSlop={8}>
+                    <Text style={{ color: '#c0392b', fontWeight: '700', fontSize: 18 }}>×</Text>
+                  </Pressable>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+
         <View style={{ marginTop: 24 }}>
           <Pressable
             onPress={create}
@@ -246,7 +398,7 @@ export default function CreateEventScreen({ navigation }: any) {
             </Text>
           </Pressable>
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }

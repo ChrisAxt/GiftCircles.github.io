@@ -60,7 +60,7 @@ export default function AllListsScreen({ navigation }: any) {
         setEventTitles({});
       }
     } catch (e) {
-      console.log('[AllLists] load error', e);
+      // Error loading lists
     } finally {
       clearTimeout(failsafe);
       stopIndicators();

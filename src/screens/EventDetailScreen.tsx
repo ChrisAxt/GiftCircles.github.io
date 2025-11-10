@@ -47,6 +47,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
   const [myUserId, setMyUserId] = useState<string | null>(null);
+  const [adminOnlyInvites, setAdminOnlyInvites] = useState(false);
 
   const [membersOpen, setMembersOpen] = useState(false);
   const membersOpacity = React.useRef(new Animated.Value(0)).current;
@@ -90,7 +91,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
           p_user: user.id,
         });
         if (accErr) {
-          console.log('[EventDetail] event_is_accessible error', accErr);
+          // Error checking access
         } else if (allowed === false) {
           Alert.alert('Upgrade required', 'You can access up to 3 events on Free.');
           if (navigation.canGoBack()) navigation.goBack();
@@ -98,7 +99,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
           return;
         }
       } catch (e) {
-        console.log('[EventDetail] event_is_accessible exception', e);
+        // Exception checking accessibility
       }
 
       // Event
@@ -110,6 +111,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
       if (eErr) throw eErr;
       if (!e) { navigation.goBack(); return; }
       setEvent(e);
+      setAdminOnlyInvites(e.admin_only_invites ?? false);
 
       // Members
       const { data: ms, error: mErr } = await supabase
@@ -183,11 +185,9 @@ export default function EventDetailScreen({ route, navigation }: any) {
         const cc = await fetchClaimCountsByList(listIds);
         setClaimCountByList(cc);
       } catch (cErr: any) {
-        console.log('[eventDetail] claim counts RPC error', cErr);
         setClaimCountByList({});
       }
     } catch (err: any) {
-      console.error('eventDetail load()', err);
       if (err?.code === 'PGRST116') { navigation.goBack(); return; }
       Alert.alert(t('eventDetail.alerts.loadErrorTitle'), err?.message ?? String(err));
     } finally {
@@ -330,7 +330,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
   }
 
   return (
-    <Screen>
+    <Screen noPaddingBottom>
       <TopBar
         title={t('eventDetail.title', 'Event')}
         right={
@@ -400,9 +400,11 @@ export default function EventDetailScreen({ route, navigation }: any) {
 
                     {/* Actions */}
                     <View style={{ flexDirection: 'row', gap: 8, marginTop: 8, flexWrap: 'wrap' }}>
-                      <Pressable style={[styles.button, { backgroundColor: '#32CD32' }]} onPress={openInvitePopup} hitSlop={12}>
-                        <Text style={styles.text}>{t('eventDetail.actions.share')}</Text>
-                      </Pressable>
+                      {(!adminOnlyInvites || isAdmin) && (
+                        <Pressable style={[styles.button, { backgroundColor: '#32CD32' }]} onPress={openInvitePopup} hitSlop={12}>
+                          <Text style={styles.text}>{t('eventDetail.actions.share')}</Text>
+                        </Pressable>
+                      )}
 
                       <Pressable style={[styles.button, { backgroundColor: '#ff7373' }]} onPress={leaveEvent} hitSlop={12}>
                         <Text style={styles.text}>{t('eventDetail.actions.leave')}</Text>
@@ -510,9 +512,11 @@ export default function EventDetailScreen({ route, navigation }: any) {
                   >
                     <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                       <Text style={{ fontWeight: '600', color: colors.text }}>{display}</Text>
-                      <Text style={{ marginLeft: 8, opacity: 0.6, fontSize: 12, color: colors.text }}>
-                        {t(`eventDetail.members.roles.${m.role}`)}
-                      </Text>
+                      {m.role === 'admin' && (
+                        <Text style={{ marginLeft: 8, opacity: 0.6, fontSize: 12, color: colors.text }}>
+                          {t(`eventDetail.members.roles.admin`)}
+                        </Text>
+                      )}
                     </View>
 
                     {showRemove && (
@@ -533,7 +537,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Actions */}
-        <View style={{ paddingHorizontal: 16, marginBottom: insets.bottom, marginTop: 8 }}>
+        <View style={{ paddingHorizontal: 16, marginBottom: 16, marginTop: 8 }}>
           <Pressable
             onPress={() => navigation.navigate('CreateList', { eventId: id })}
             style={{
@@ -549,7 +553,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
         </View>
 
         {/* Lists section */}
-        <View style={{ flex: 1, paddingHorizontal: 16, paddingBottom: insets.bottom + 24, paddingTop: 16 }}>
+        <View style={{ flex: 1, paddingHorizontal: 16, paddingTop: 16 }}>
           <Text style={{ fontSize: 16, fontWeight: '700', marginBottom: 8, color: colors.text }}>
             {t('eventDetail.lists.title')}
           </Text>
@@ -558,7 +562,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
             style={{ flex: 1 }}
             data={lists}
             keyExtractor={(l) => l.id}
-            contentContainerStyle={{ paddingBottom: insets.bottom + 16 }}
+            contentContainerStyle={{ paddingBottom: insets.bottom + 80 }}
             keyboardShouldPersistTaps="handled"
             renderItem={({ item }) => {
               const recipientIds = recipientsByList[item.id] ?? [];

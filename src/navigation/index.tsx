@@ -30,6 +30,7 @@ import EditListScreen from '../screens/EditListScreen';
 import ProfileScreen from '../screens/ProfileScreen';
 import EditEventScreen from '../screens/EditEventScreen';
 import OnboardingScreen from '../screens/OnboardingScreen';
+import SupportScreen from '../screens/SupportScreen';
 import AllListsScreen from '../screens/AllListsScreen';
 import MyClaimsScreen from '../screens/MyClaimsScreen';
 import EditItemScreen from '../screens/EditItemScreen';
@@ -54,11 +55,7 @@ function Tabs() {
   const { t } = useTranslation();
   return (
     <Tab.Navigator
-      screenOptions={{
-        headerShown: false,
-        tabBarHideOnKeyboard: false,
-        tabBarPosition: 'bottom',
-      }}
+      tabBarPosition="bottom"
       tabBar={(p) => <FancyTabBar {...p} />}
     >
       <Tab.Screen name="Events" component={EventListScreen} options={{ title: t('navigation.tabs.events') }} />
@@ -141,16 +138,13 @@ function InnerNavigator() {
 
   // Configure notification handler (how they appear when app is foregrounded)
   useEffect(() => {
-    console.log('[Navigation] Configuring notification handler');
     configureNotificationHandler();
   }, []);
 
   // Set up notification tap listener
   useEffect(() => {
-    console.log('[Navigation] Setting up notification tap listener with navigationRef:', navigationRef);
-    const cleanup = setupNotificationResponseListener(navigationRef);
+    const cleanup = setupNotificationResponseListener(navigationRef as React.RefObject<NavigationContainerRef<any>>);
     return () => {
-      console.log('[Navigation] Cleaning up notification listener');
       cleanup();
     };
   }, []);
@@ -161,6 +155,7 @@ function InnerNavigator() {
 
   const [checkingProfile, setCheckingProfile] = useState(false);
   const [needsOnboarding, setNeedsOnboarding] = useState(false);
+  const [needsSupport, setNeedsSupport] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -184,20 +179,44 @@ function InnerNavigator() {
   useEffect(() => {
     let cancelled = false;
     async function check() {
-      if (!session) { setNeedsOnboarding(false); return; }
+      if (!session) {
+        setNeedsOnboarding(false);
+        setNeedsSupport(false);
+        return;
+      }
       setCheckingProfile(true);
       try {
         const { data: { user } } = await supabase.auth.getUser();
-        if (!user) { setNeedsOnboarding(false); return; }
+        if (!user) {
+          setNeedsOnboarding(false);
+          setNeedsSupport(false);
+          return;
+        }
 
         const { data: prof } = await supabase
           .from('profiles')
-          .select('onboarding_done')
+          .select('onboarding_done, last_support_screen_shown, plan, pro_until')
           .eq('id', user.id)
           .maybeSingle();
 
-        const done = !!prof?.onboarding_done;
-        if (!cancelled) setNeedsOnboarding(!done);
+        const onboardingDone = !!prof?.onboarding_done;
+        if (!cancelled) setNeedsOnboarding(!onboardingDone);
+
+        // Check if user is pro: plan is 'pro' OR pro_until is in the future
+        const isPro = prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
+        const lastShown = prof?.last_support_screen_shown;
+        let shouldShowSupport = false;
+
+        if (!isPro && onboardingDone) {
+          if (!lastShown) {
+            shouldShowSupport = true;
+          } else {
+            const daysSince = (Date.now() - new Date(lastShown).getTime()) / (1000 * 60 * 60 * 24);
+            shouldShowSupport = daysSince >= 30;
+          }
+        }
+
+        if (!cancelled) setNeedsSupport(shouldShowSupport);
       } finally {
         if (!cancelled) setCheckingProfile(false);
       }
@@ -216,7 +235,10 @@ function InnerNavigator() {
     );
   }
 
-  const initialRoute = !session ? 'Auth' : (needsOnboarding ? 'Onboarding' : 'Home');
+  const initialRoute = !session ? 'Auth'
+    : needsOnboarding ? 'Support'
+    : needsSupport ? 'Support'
+    : 'Home';
 
   return (
     <>
@@ -226,9 +248,6 @@ function InnerNavigator() {
           key={initialRoute}
           screenOptions={{
             statusBarTranslucent: false,
-            statusBarColor: theme.colors.card,
-            statusBarStyle: colorScheme === 'dark' ? 'light' : 'dark',
-            headerTopInsetEnabled: true,
             headerStyle: { backgroundColor: theme.colors.card },
             contentStyle: { backgroundColor: theme.colors.background },
           }}
@@ -237,6 +256,7 @@ function InnerNavigator() {
           <Stack.Screen name="Auth" component={AuthScreen} options={{ headerShown: false }} />
         ) : (
           <>
+            <Stack.Screen name="Support" component={SupportScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Onboarding" component={OnboardingScreen} options={{ headerShown: false }} />
             <Stack.Screen name="Home" component={Tabs} options={{ headerShown: false }} />
 

@@ -7,7 +7,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useTranslation } from 'react-i18next';
 
 /** ---------- Tiny UI primitives to draw mock screens ---------- */
-function Card({ children, style = {} as any }) {
+function Card({ children, style = {} }: { children: React.ReactNode; style?: any }) {
   return (
     <View
       style={[{
@@ -98,7 +98,7 @@ function Chip({ text }: { text: string }) {
   );
 }
 
-function Pill({ text, tone = 'gray' as 'gray' | 'green' | 'red' }) {
+function Pill({ text, tone = 'gray' }: { text: string; tone?: 'gray' | 'green' | 'red' }) {
   const bg = tone === 'green' ? '#e9f8ec' : tone === 'red' ? '#fde8e8' : '#edf1f5';
   const fg = tone === 'green' ? '#1f9e4a' : tone === 'red' ? '#c0392b' : '#63707e';
   return (
@@ -447,10 +447,165 @@ function GettingStartedMock() {
   );
 }
 
+/** ---------- NEW: Purchase Reminder Mock (Push Notification) ---------- */
+function PurchaseReminderMock() {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {/* Mock phone notification */}
+      <View
+        style={{
+          backgroundColor: 'white',
+          borderRadius: 16,
+          padding: 16,
+          marginHorizontal: 16,
+          width: '100%',
+          maxWidth: 380,
+          shadowColor: '#000',
+          shadowOpacity: 0.15,
+          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 8,
+        }}
+      >
+        {/* App header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              backgroundColor: '#2e95f1',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 10,
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>G</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', opacity: 0.7 }}>GiftCircles</Text>
+            <Text style={{ fontSize: 11, opacity: 0.5 }}>now</Text>
+          </View>
+        </View>
+
+        {/* Notification content */}
+        <Text style={{ fontSize: 16, fontWeight: '800', marginBottom: 6 }}>
+          Bob's Birthday is in 3 days! 🎂
+        </Text>
+        <Text style={{ fontSize: 14, opacity: 0.8 }}>
+          You have 2 items to purchase. Don't forget!
+        </Text>
+
+        {/* Premium badge */}
+        <View style={{ marginTop: 12, alignSelf: 'flex-start' }}>
+          <View
+            style={{
+              backgroundColor: '#fef3c7',
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: '#fbbf24',
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400e' }}>✨ PREMIUM</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+/** ---------- NEW: Daily Digest Mock (Push Notification) ---------- */
+function DailyDigestMock() {
+  return (
+    <View style={{ alignItems: 'center' }}>
+      {/* Mock phone notification */}
+      <View
+        style={{
+          backgroundColor: 'white',
+          borderRadius: 16,
+          padding: 16,
+          marginHorizontal: 16,
+          width: '100%',
+          maxWidth: 380,
+          shadowColor: '#000',
+          shadowOpacity: 0.15,
+          shadowRadius: 20,
+          shadowOffset: { width: 0, height: 4 },
+          elevation: 8,
+        }}
+      >
+        {/* App header */}
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+          <View
+            style={{
+              width: 28,
+              height: 28,
+              borderRadius: 8,
+              backgroundColor: '#21c36b',
+              alignItems: 'center',
+              justifyContent: 'center',
+              marginRight: 10,
+            }}
+          >
+            <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>G</Text>
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 12, fontWeight: '700', opacity: 0.7 }}>GiftCircles Digest</Text>
+            <Text style={{ fontSize: 11, opacity: 0.5 }}>8:00 AM</Text>
+          </View>
+        </View>
+
+        {/* Notification content */}
+        <Text style={{ fontSize: 16, fontWeight: '800', marginBottom: 8 }}>
+          Your Weekly Summary 📊
+        </Text>
+
+        {/* Stats */}
+        <View style={{ backgroundColor: '#f9fafb', borderRadius: 12, padding: 12, marginBottom: 8 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, opacity: 0.7 }}>New items added:</Text>
+            <Text style={{ fontSize: 13, fontWeight: '700' }}>5</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+            <Text style={{ fontSize: 13, opacity: 0.7 }}>Items claimed:</Text>
+            <Text style={{ fontSize: 13, fontWeight: '700' }}>8</Text>
+          </View>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+            <Text style={{ fontSize: 13, opacity: 0.7 }}>Upcoming events:</Text>
+            <Text style={{ fontSize: 13, fontWeight: '700' }}>2</Text>
+          </View>
+        </View>
+
+        <Text style={{ fontSize: 13, opacity: 0.7 }}>
+          Tap to view details in the app
+        </Text>
+
+        {/* Premium badge */}
+        <View style={{ marginTop: 12, alignSelf: 'flex-start' }}>
+          <View
+            style={{
+              backgroundColor: '#fef3c7',
+              paddingHorizontal: 10,
+              paddingVertical: 4,
+              borderRadius: 999,
+              borderWidth: 1,
+              borderColor: '#fbbf24',
+            }}
+          >
+            <Text style={{ fontSize: 11, fontWeight: '800', color: '#92400e' }}>✨ PREMIUM</Text>
+          </View>
+        </View>
+      </View>
+    </View>
+  );
+}
+
 
 /** ---------- Slides data ---------- */
 type Slide =
-  | { kind: 'mock'; title: string; caption: string; render: () => JSX.Element; cta?: { label: string; onPress: () => void } };
+  | { kind: 'mock'; title: string; caption: string; render: () => React.ReactElement; cta?: { label: string; onPress: () => void } };
 
 export default function OnboardingScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -500,21 +655,21 @@ export default function OnboardingScreen({ navigation }: any) {
     },
     {
       kind: 'mock',
+      title: t('onboarding.slides.purchaseReminders.title'),
+      caption: t('onboarding.slides.purchaseReminders.caption'),
+      render: () => <PurchaseReminderMock />,
+    },
+    {
+      kind: 'mock',
+      title: t('onboarding.slides.dailyDigest.title'),
+      caption: t('onboarding.slides.dailyDigest.caption'),
+      render: () => <DailyDigestMock />,
+    },
+    {
+      kind: 'mock',
       title: t('onboarding.slides.myClaims.title'),
       caption: t('onboarding.slides.myClaims.caption'),
       render: () => <MyClaimsMock isSmall={isSmallScreen} />,
-    },
-    {
-      kind: 'mock',
-      title: t('onboarding.slides.joinByCode.title'),
-      caption: t('onboarding.slides.joinByCode.caption'),
-      render: () => <JoinEventMock />,
-    },
-    {
-      kind: 'mock',
-      title: t('onboarding.slides.yourEvents.title'),
-      caption: t('onboarding.slides.yourEvents.caption'),
-      render: () => <EventCardMock />,
     },
   ];
 

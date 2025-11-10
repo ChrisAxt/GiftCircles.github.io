@@ -1,0 +1,23 @@
+schema_name,type_name,type_category,enum_values
+public,claim_split_requests,COMPOSITE,null
+public,claims,COMPOSITE,null
+public,daily_activity_log,COMPOSITE,null
+public,event_invites,COMPOSITE,null
+public,event_member_stats,COMPOSITE,null
+public,event_members,COMPOSITE,null
+public,events,COMPOSITE,null
+public,items,COMPOSITE,null
+public,list_exclusions,COMPOSITE,null
+public,list_recipients,COMPOSITE,null
+public,list_viewers,COMPOSITE,null
+public,list_visibility,ENUM,"event, selected"
+public,lists,COMPOSITE,null
+public,member_role,ENUM,"giver, recipient, admin"
+public,notification_queue,COMPOSITE,null
+public,orphaned_lists,COMPOSITE,null
+public,profiles,COMPOSITE,null
+public,push_tokens,COMPOSITE,null
+public,rate_limit_tracking,COMPOSITE,null
+public,security_audit_log,COMPOSITE,null
+public,sent_reminders,COMPOSITE,null
+public,user_plans,COMPOSITE,null

@@ -14,6 +14,9 @@ type ListRow = {
   name: string;
   event_id: string;
   created_by: string;
+  random_assignment_enabled?: boolean;
+  random_assignment_mode?: string | null;
+  random_assignment_executed_at?: string | null;
 };
 
 export default function EditListScreen({ route, navigation }: any) {
@@ -36,20 +39,20 @@ export default function EditListScreen({ route, navigation }: any) {
       const { data: { user }, error: userErr } = await supabase.auth.getUser();
       if (userErr) throw userErr;
       if (!user) {
-        setErrorMsg('Please sign in');
+        setErrorMsg(t('editList.errors.signInRequired'));
         return;
       }
 
       // Get list
       const { data: listData, error: listErr } = await supabase
         .from('lists')
-        .select('id, name, event_id, created_by')
+        .select('id, name, event_id, created_by, random_assignment_enabled, random_assignment_mode, random_assignment_executed_at')
         .eq('id', listId)
         .maybeSingle();
 
       if (listErr) throw listErr;
       if (!listData) {
-        setErrorMsg('List not found');
+        setErrorMsg(t('editList.errors.listNotFound'));
         return;
       }
 
@@ -71,23 +74,21 @@ export default function EditListScreen({ route, navigation }: any) {
       const isAdmin = memberData?.role === 'admin';
       setCanEdit(isCreator || isAdmin);
     } catch (e: any) {
-      console.error('[EditList] load error', e);
-      setErrorMsg(e?.message ?? 'Failed to load list');
+      setErrorMsg(e?.message ?? t('editList.errors.failedToLoad'));
     } finally {
       setLoading(false);
     }
-  }, [listId]);
+  }, [listId, t]);
 
   useFocusEffect(useCallback(() => { load(); }, [load]));
 
   const save = async () => {
     if (!canEdit) {
-      toast.error('Not allowed', { text2: 'Only the list creator or event admin can edit' });
+      toast.error(t('editList.errors.notAllowedTitle'), { text2: t('editList.errors.notAllowedBody') });
       return;
     }
-
     if (!name.trim()) {
-      toast.error('Name required', { text2: 'Please enter a list name' });
+      toast.error(t('editList.errors.nameRequiredTitle'), { text2: t('editList.errors.nameRequiredBody') });
       return;
     }
 
@@ -99,12 +100,10 @@ export default function EditListScreen({ route, navigation }: any) {
         .eq('id', listId);
 
       if (error) throw error;
-
-      toast.success('List updated');
+      toast.success(t('editList.toasts.listUpdated'));
       navigation.goBack();
     } catch (e: any) {
-      console.error('[EditList] save error', e);
-      toast.error('Save failed', { text2: e?.message ?? String(e) });
+      toast.error(t('editList.errors.saveFailedTitle'), { text2: e?.message ?? String(e) });
     } finally {
       setSaving(false);
     }
@@ -121,7 +120,7 @@ export default function EditListScreen({ route, navigation }: any) {
   if (errorMsg) {
     return (
       <Screen>
-        <TopBar title="Edit List" />
+        <TopBar title={t('editList.screenTitle')} />
         <View style={{ flex: 1, padding: 16, alignItems: 'center', justifyContent: 'center' }}>
           <Text style={{ fontSize: 16, textAlign: 'center', marginBottom: 16, color: colors.text }}>
             {errorMsg}
@@ -137,7 +136,7 @@ export default function EditListScreen({ route, navigation }: any) {
               borderColor: colors.border,
             }}
           >
-            <Text style={{ fontWeight: '700', color: colors.text }}>Go Back</Text>
+            <Text style={{ fontWeight: '700', color: colors.text }}>{t('editList.actions.goBack')}</Text>
           </Pressable>
         </View>
       </Screen>
@@ -146,15 +145,45 @@ export default function EditListScreen({ route, navigation }: any) {
 
   return (
     <Screen>
-      <TopBar title="Edit List" />
+      <TopBar title={t('editList.screenTitle')} />
       <View style={{ padding: 16, gap: 12 }}>
         <LabeledInput
-          label="List Name"
-          placeholder="e.g. Christmas Wishlist"
+          label={t('editList.labels.listName')}
+          placeholder={t('editList.placeholders.listName')}
           value={name}
           onChangeText={setName}
           editable={canEdit}
         />
+
+        {/* Random Assignment Info (readonly) */}
+        {list?.random_assignment_enabled && (
+          <View
+            style={{
+              backgroundColor: colors.card,
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: colors.border,
+            }}
+          >
+            <Text style={{ fontWeight: '600', marginBottom: 4, color: colors.text }}>
+              {t('editList.randomAssignment.title', 'Random Assignment')}
+            </Text>
+            <Text style={{ fontSize: 13, opacity: 0.7, color: colors.text }}>
+              {t('editList.randomAssignment.enabled', 'This list uses random assignment')}
+            </Text>
+            <Text style={{ fontSize: 13, opacity: 0.7, color: colors.text, marginTop: 4 }}>
+              {t('editList.randomAssignment.mode', 'Mode')}: {list.random_assignment_mode === 'one_per_member'
+                ? t('editList.randomAssignment.onePerMember', 'One item per member')
+                : t('editList.randomAssignment.distributeAll', 'Distribute all items')}
+            </Text>
+            {list.random_assignment_executed_at && (
+              <Text style={{ fontSize: 12, opacity: 0.6, color: colors.text, marginTop: 4 }}>
+                {t('editList.randomAssignment.lastAssigned', 'Last assigned')}: {new Date(list.random_assignment_executed_at).toLocaleString()}
+              </Text>
+            )}
+          </View>
+        )}
 
         <View style={{ marginTop: 12 }}>
           <Pressable
@@ -172,14 +201,14 @@ export default function EditListScreen({ route, navigation }: any) {
             }}
           >
             {!canEdit ? (
-              <Text style={{ color: colors.text, fontWeight: '700' }}>View Only</Text>
+              <Text style={{ color: colors.text, fontWeight: '700' }}>{t('editList.states.viewOnly')}</Text>
             ) : saving ? (
               <View style={{ flexDirection: 'row', alignItems: 'center' }}>
                 <ActivityIndicator color="#fff" />
-                <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>Saving...</Text>
+                <Text style={{ color: '#fff', fontWeight: '700', marginLeft: 8 }}>{t('editList.states.saving')}</Text>
               </View>
             ) : (
-              <Text style={{ color: '#fff', fontWeight: '700' }}>Save Changes</Text>
+              <Text style={{ color: '#fff', fontWeight: '700' }}>{t('editList.actions.save')}</Text>
             )}
           </Pressable>
         </View>

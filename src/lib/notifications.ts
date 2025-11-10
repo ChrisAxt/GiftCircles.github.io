@@ -34,20 +34,12 @@ export function configureNotificationHandler() {
 export function setupNotificationResponseListener(
   navigationRef: React.RefObject<NavigationContainerRef<any>>
 ) {
-  console.log('[Notification] Setting up notification response listener');
-
   const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-    console.log('[Notification] ===== NOTIFICATION TAPPED =====');
     const data = response.notification.request.content.data as NotificationData;
-    console.log('[Notification] Response received:', JSON.stringify(data, null, 2));
-    console.log('[Notification] Full response:', JSON.stringify(response, null, 2));
-
     handleNotificationNavigation(navigationRef, data);
   });
 
-  console.log('[Notification] Listener registered successfully');
   return () => {
-    console.log('[Notification] Removing listener');
     subscription.remove();
   };
 }
@@ -59,30 +51,21 @@ export function handleNotificationNavigation(
   navigationRef: React.RefObject<NavigationContainerRef<any>>,
   data: NotificationData
 ) {
-  console.log('[Notification] handleNotificationNavigation called');
-  console.log('[Notification] navigationRef.current:', navigationRef.current);
-  console.log('[Notification] navigationRef.current?.isReady():', navigationRef.current?.isReady());
-
   if (!navigationRef.current?.isReady()) {
-    console.warn('[Notification] Navigation not ready, will retry in 500ms');
     setTimeout(() => handleNotificationNavigation(navigationRef, data), 500);
     return;
   }
 
   const { type, list_id, event_id, invite_id, item_id } = data;
 
-  console.log('[Notification] Navigation ready! Handling navigation:', { type, list_id, event_id, invite_id, item_id });
-
   switch (type) {
     case 'list_for_recipient':
       // User was added as a list recipient
       // Navigate to Events tab where they can see the PendingInvitesCard and accept/decline
-      console.log('[Notification] Navigating to Home -> Events tab');
       try {
         navigationRef.current.navigate('Home', { screen: 'Events' });
-        console.log('[Notification] Navigation successful!');
       } catch (error) {
-        console.error('[Notification] Navigation failed:', error);
+        // Navigation failed
       }
       break;
 
@@ -126,8 +109,7 @@ export function handleNotificationNavigation(
       break;
 
     default:
-      console.warn('[Notification] Unknown notification type:', type);
-      // Default to home screen
+      // Default to home screen for unknown notification types
       navigationRef.current.navigate('Home');
   }
 }

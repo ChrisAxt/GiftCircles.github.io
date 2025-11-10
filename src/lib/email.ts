@@ -46,7 +46,6 @@ export async function sendInviteEmail(args: SendInviteArgs): Promise<SendInviteR
           } catch {}
         }
       }
-      console.error("send-invite-email invoke error:", msg);
       return { ok: false, error: msg };
     }
 

@@ -36,7 +36,7 @@ export default function EditItemScreen({ route, navigation }: any) {
 
         if (error) throw error;
         if (!data) {
-          toast.error(t('listDetail.errors.notFound'));
+          toast.error(t('listDetail.errors.notFound'), {});
           navigation.goBack();
           return;
         }
@@ -47,7 +47,7 @@ export default function EditItemScreen({ route, navigation }: any) {
         setNotes(data.notes || '');
       } catch (err: any) {
         const errorDetails = parseSupabaseError(err, t);
-        toast.error(errorDetails.title, errorDetails.message);
+        toast.error(errorDetails.title, { text2: errorDetails.message });
         navigation.goBack();
       } finally {
         setLoading(false);
@@ -84,11 +84,11 @@ export default function EditItemScreen({ route, navigation }: any) {
 
       if (error) throw error;
 
-      toast.success(t('listDetail.toasts.itemUpdated', 'Item updated'));
+      toast.success(t('listDetail.toasts.itemUpdated', 'Item updated'), {});
       navigation.goBack();
     } catch (err: any) {
       const errorDetails = parseSupabaseError(err, t);
-      toast.error(errorDetails.title, errorDetails.message);
+      toast.error(errorDetails.title, { text2: errorDetails.message });
     } finally {
       setSaving(false);
     }

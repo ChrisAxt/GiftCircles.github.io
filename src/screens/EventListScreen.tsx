@@ -10,7 +10,8 @@ import { toast } from '../lib/toast';
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useTranslation } from 'react-i18next';
 import { PendingInvitesCard } from '../components/PendingInvitesCard';
-
+import { PendingSplitRequestsCard } from '../components/PendingSplitRequestsCard';
+import { Screen } from '../components/Screen';
 type MemberRow = { event_id: string; user_id: string };
 
 // Shape returned by public.events_for_current_user()
@@ -24,6 +25,8 @@ type EventsRPCRow = {
   total_items: number | null;
   claimed_count: number | null;
   accessible: boolean | null;
+  my_claims: number | null;
+  my_unpurchased_claims: number | null;
 };
 
 export default function EventListScreen({ navigation }: any) {
@@ -34,6 +37,7 @@ export default function EventListScreen({ navigation }: any) {
   const [profileNames, setProfileNames] = useState<Record<string, string>>({});
   const [itemCountByEvent, setItemCountByEvent] = useState<Record<string, number>>({});
   const [claimsByEvent, setClaimsByEvent] = useState<Record<string, number>>({});
+  const [myClaimsByEvent, setMyClaimsByEvent] = useState<Record<string, number>>({});
   const [unpurchasedByEvent, setUnpurchasedByEvent] = useState<Record<string, number>>({});
   const [accessibleByEvent, setAccessibleByEvent] = useState<Record<string, boolean>>({});
   const [loading, setLoading] = useState(true);
@@ -74,26 +78,14 @@ export default function EventListScreen({ navigation }: any) {
         const metaName = (user.user_metadata?.name ?? '').trim();
         const emailPrefix = (user.email?.split('@')[0] ?? 'there').trim();
 
-        // Fetch profile first
+        // Fetch profile display name
         const { data: prof } = await supabase
           .from('profiles')
           .select('display_name')
           .eq('id', user.id)
           .maybeSingle();
 
-        // If profile needs updating with metadata name
-        if (metaName) {
-          const needsUpdate =
-            !prof?.display_name ||
-            prof.display_name.trim() === '' ||
-            prof.display_name.trim() === emailPrefix;
-
-          if (needsUpdate) {
-            await supabase.rpc('set_profile_name', { p_name: metaName }).catch(() => { });
-          }
-        }
-
-        // Set name only once, using the final value
+        // Use profile name if available, fallback to metadata or email prefix
         const finalName =
           (prof?.display_name ?? '').trim() ||
           metaName ||
@@ -118,16 +110,22 @@ export default function EventListScreen({ navigation }: any) {
       setEvents(minimalEvents);
 
       const itemMap: Record<string, number> = {};
-      const claimMap: Record<string, number> = {};
       const accessMap: Record<string, boolean> = {};
+      const claimsMap: Record<string, number> = {};
+      const myClaimsMap: Record<string, number> = {};
+      const unpurchasedMap: Record<string, number> = {};
       rows.forEach(r => {
         itemMap[r.id] = Number(r.total_items ?? 0);
-        claimMap[r.id] = Number(r.claimed_count ?? 0);
         accessMap[r.id] = !!r.accessible;
+        claimsMap[r.id] = Number(r.claimed_count ?? 0);
+        myClaimsMap[r.id] = Number(r.my_claims ?? 0);
+        unpurchasedMap[r.id] = Number(r.my_unpurchased_claims ?? 0);
       });
       setItemCountByEvent(itemMap);
-      setClaimsByEvent(claimMap);
       setAccessibleByEvent(accessMap);
+      setClaimsByEvent(claimsMap);
+      setMyClaimsByEvent(myClaimsMap);
+      setUnpurchasedByEvent(unpurchasedMap);
 
       const eventIds = rows.map(r => r.id);
 
@@ -161,54 +159,7 @@ export default function EventListScreen({ navigation }: any) {
         setProfileNames({});
       }
 
-      // ----- Unpurchased claims (for the third stat tile) -----
-      if (eventIds.length) {
-        const { data: lists, error: lErr } = await supabase
-          .from('lists')
-          .select('id,event_id')
-          .in('event_id', eventIds);
-        if (lErr) throw lErr;
-
-        const listIds = (lists ?? []).map(l => l.id);
-        const eventIdByList: Record<string, string> = {};
-        (lists ?? []).forEach(l => { eventIdByList[l.id] = l.event_id; });
-
-        let iAmRecipientOnList = new Set<string>();
-        if (myId && listIds.length) {
-          const { data: myRecips, error: recipErr } = await supabase
-            .from('list_recipients')
-            .select('list_id')
-            .in('list_id', listIds)
-            .eq('user_id', myId);
-          if (recipErr) throw recipErr;
-          iAmRecipientOnList = new Set((myRecips ?? []).map(r => r.list_id));
-        }
-
-        const { data: unpurchasedClaims, error: upErr } = listIds.length
-          ? await supabase
-            .from('claims')
-            .select('id,item_id,purchased,items!inner(list_id)')
-            .eq('purchased', false)
-            .in('items.list_id', listIds)
-          : { data: [], error: null as any };
-        if (upErr) throw upErr;
-
-        const unpurchasedPerEvent: Record<string, number> = {};
-        (unpurchasedClaims ?? []).forEach((cl: any) => {
-          const listId = cl.items?.list_id as string | undefined;
-          if (!listId) return;
-          if (iAmRecipientOnList.has(listId)) return; // hide recipient lists
-          const evId = eventIdByList[listId];
-          if (!evId) return;
-          unpurchasedPerEvent[evId] = (unpurchasedPerEvent[evId] || 0) + 1;
-        });
-        setUnpurchasedByEvent(unpurchasedPerEvent);
-      } else {
-        setUnpurchasedByEvent({});
-      }
-
     } catch (err: any) {
-      console.error('EventList load()', err);
       toast.error('Load error', { text2: err?.message ?? String(err) });
     } finally {
       clearTimeout(failsafe);
@@ -232,8 +183,8 @@ export default function EventListScreen({ navigation }: any) {
   }, []);
 
   const totalClaimsVisible = useMemo(
-    () => Object.values(claimsByEvent).reduce((a, b) => a + b, 0),
-    [claimsByEvent]
+    () => Object.values(myClaimsByEvent).reduce((a, b) => a + b, 0),
+    [myClaimsByEvent]
   );
 
   const toPurchaseCount = useMemo(
@@ -294,18 +245,17 @@ export default function EventListScreen({ navigation }: any) {
       });
 
       if (checkError) {
-        console.log('[Events] can_join_event RPC error:', checkError);
         // Show error but don't allow navigation - server-side check failed
+        // TODO: Move body to translations + translate
         Alert.alert(
           t('errors.generic.title', 'Something went wrong'),
           t('errors.generic.message', 'An unexpected error occurred. Please try again.')
         );
         return;
       }
-
+      // TODO: Move body to translations + translate
       // Block if user has reached free tier limit
       if (canJoin === false) {
-        console.log('[Events] Free tier limit reached - blocking join');
         Alert.alert(
           t('errors.limits.freeLimitTitle', 'Upgrade required'),
           t('errors.limits.joinLimitMessage', 'You can only be a member of 3 events on the free plan. Upgrade to join more events or leave an existing event first.')
@@ -313,11 +263,10 @@ export default function EventListScreen({ navigation }: any) {
         return;
       }
 
-      console.log('[Events] Can join event - navigating to JoinEvent screen');
       navigation.navigate('JoinEvent');
     } catch (err) {
-      console.log('[Events] onPressJoin error:', err);
       // Show error instead of navigating
+      // TODO: Move body to translations + translate
       Alert.alert(
         t('errors.generic.title', 'Something went wrong'),
         t('errors.generic.message', 'An unexpected error occurred. Please try again.')
@@ -339,8 +288,8 @@ export default function EventListScreen({ navigation }: any) {
       });
 
       if (checkError) {
-        console.log('[Events] can_create_event RPC error:', checkError);
         // Show error but don't allow navigation - server-side check failed
+        // TODO: Move body to translations + translate
         Alert.alert(
           t('errors.generic.title', 'Something went wrong'),
           t('errors.generic.message', 'An unexpected error occurred. Please try again.')
@@ -350,7 +299,7 @@ export default function EventListScreen({ navigation }: any) {
 
       // Block if user has reached free tier limit
       if (canCreate === false) {
-        console.log('[Events] Free tier limit reached - blocking creation');
+        // TODO: Move body to translations + translate
         Alert.alert(
           t('errors.limits.freeLimitTitle', 'Upgrade required'),
           t('errors.limits.freeLimitMessage', 'You can create up to 3 events on the free plan. Upgrade to create more.')
@@ -358,11 +307,10 @@ export default function EventListScreen({ navigation }: any) {
         return;
       }
 
-      console.log('[Events] Can create event - navigating to CreateEvent screen');
       navigation.navigate('CreateEvent');
     } catch (err) {
-      console.log('[Events] onPressCreate error:', err);
       // Show error instead of navigating
+      // TODO: Move body to translations + translate
       Alert.alert(
         t('errors.generic.title', 'Something went wrong'),
         t('errors.generic.message', 'An unexpected error occurred. Please try again.')
@@ -371,13 +319,13 @@ export default function EventListScreen({ navigation }: any) {
   };
 
   return (
-    <SafeAreaView edges={['bottom']} style={{ flex: 1, backgroundColor: colors.background }}>
+    <Screen >
       <View style={{ flex: 1, backgroundColor: colors.background }}>
         <LinearGradient
           colors={['#21c36b', '#2e95f1']}
           start={{ x: 0, y: 0 }}
           end={{ x: 1, y: 0 }}
-          style={{ paddingTop: 48, paddingBottom: 16, paddingHorizontal: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
+          style={{ paddingTop: Math.max(insets.top, 16) + 16, paddingBottom: 16, paddingHorizontal: 16, borderBottomLeftRadius: 16, borderBottomRightRadius: 16 }}
         >
           <Text style={{ color: 'white', fontSize: 22, fontWeight: '700', marginBottom: 4 }}>
             {t('eventList.header.welcome')} {meName}!
@@ -386,17 +334,17 @@ export default function EventListScreen({ navigation }: any) {
 
           <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
             {/* make stat cards theme-aware but keep inside gradient, so use a light-ish surface */}
-            <View style={{ flex: 1, backgroundColor: colors.card, paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ flex: 1, backgroundColor: colors.card, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>{String(events.length)}</Text>
-              <Text style={{ marginTop: 4, color: colors.text, opacity: 0.7 }}>{t('eventList.stats.activeEvents')}</Text>
+              <Text style={{ marginTop: 4, color: colors.text, opacity: 0.7, fontSize: 10, textAlign: 'center', lineHeight: 13 }}>{t('eventList.stats.activeEvents')}</Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: colors.card, paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ flex: 1, backgroundColor: colors.card, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>{String(totalClaimsVisible)}</Text>
-              <Text style={{ marginTop: 4, color: colors.text, opacity: 0.7 }}>{t('eventList.stats.itemsClaimed')}</Text>
+              <Text style={{ marginTop: 4, color: colors.text, opacity: 0.7, fontSize: 10, textAlign: 'center', lineHeight: 13 }}>{t('eventList.stats.itemsClaimed')}</Text>
             </View>
-            <View style={{ flex: 1, backgroundColor: colors.card, paddingVertical: 14, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
+            <View style={{ flex: 1, backgroundColor: colors.card, paddingVertical: 14, paddingHorizontal: 4, borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: colors.text }}>{String(toPurchaseCount)}</Text>
-              <Text style={{ marginTop: 4, color: colors.text, opacity: 0.7 }}>{t('eventList.stats.toPurchase')}</Text>
+              <Text style={{ marginTop: 4, color: colors.text, opacity: 0.7, fontSize: 10, textAlign: 'center', lineHeight: 13 }}>{t('eventList.stats.toPurchase')}</Text>
             </View>
           </View>
         </LinearGradient>
@@ -404,6 +352,7 @@ export default function EventListScreen({ navigation }: any) {
         {/* Pending Invites Card */}
         <View style={{ paddingHorizontal: 16, paddingTop: 16 }}>
           <PendingInvitesCard onInviteAccepted={load} refreshTrigger={refreshTrigger} />
+          <PendingSplitRequestsCard onRequestAccepted={load} refreshTrigger={refreshTrigger} />
         </View>
 
         <View style={{ paddingHorizontal: 16, paddingVertical: 12, flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
@@ -437,6 +386,7 @@ export default function EventListScreen({ navigation }: any) {
 
             const onPress = () => {
               if (!isAccessible) {
+                // TODO: Move body to translations + translate
                 Alert.alert(
                   t('errors.limits.freeLimitTitle', 'Upgrade required'),
                   t('errors.limits.eventAccessMessage', 'You can access up to 3 events on the free plan. This event is locked. Upgrade to access all your events.')
@@ -462,12 +412,12 @@ export default function EventListScreen({ navigation }: any) {
           ListEmptyComponent={
             <View style={{ alignItems: 'center', marginTop: 48 }}>
               <Text style={{ opacity: 0.6, color: colors.text }}>
-                {t('eventList.empty.title')}{t('eventList.empty.body')}
+                {t('eventList.empty.title')} {t('eventList.empty.body')}
               </Text>
             </View>
           }
         />
       </View>
-    </SafeAreaView>
+    </Screen>
   );
 }

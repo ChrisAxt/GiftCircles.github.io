@@ -96,7 +96,7 @@ export default function MyClaimsScreen({ navigation }: any) {
       if (cErr) throw cErr;
       setClaims((cs ?? []) as unknown as ClaimRow[]);
     } catch (e) {
-      console.log('[MyClaims] load error', e);
+      // Error loading claims
     } finally {
       clearTimeout(failsafe);
       stopIndicators();
