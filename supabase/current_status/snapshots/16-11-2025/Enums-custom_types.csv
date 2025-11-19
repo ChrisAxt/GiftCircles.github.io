@@ -1,0 +1,3 @@
+enum_name,values
+list_visibility,"{event,selected}"
+member_role,"{giver,recipient,admin}"

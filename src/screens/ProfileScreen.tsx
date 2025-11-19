@@ -63,13 +63,13 @@ export default function ProfileScreen({ navigation }: any) {
 
       const { data: prof } = await supabase
         .from('profiles')
-        .select('display_name, plan, pro_until')
+        .select('display_name, plan, pro_until, manual_pro')
         .eq('id', user.id)
         .maybeSingle();
       setDisplayName((prof?.display_name ?? '').trim());
 
-      // Check if user is pro
-      const userIsPro = prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
+      // Check if user is pro: manual_pro OR plan is 'pro' OR pro_until is in the future
+      const userIsPro = prof?.manual_pro === true || prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
       setIsPro(!!userIsPro);
 
       const { count: evCount } = await supabase
@@ -147,7 +147,6 @@ export default function ProfileScreen({ navigation }: any) {
         {
           text: t('profile.supportUs.confirm', 'Support us'),
           onPress: async () => {
-            // TODO: Replace with actual Buy Me a Coffee URL
             const url = 'https://buymeacoffee.com/giftcircles';
             const supported = await Linking.canOpenURL(url);
 

@@ -73,6 +73,9 @@ const de = {
         cancel: 'Vielleicht später',
         confirm: 'Unterstütze uns',
       },
+      manageSubscription: {
+        button: '⭐ Abonnement verwalten',
+      },
       dangerTitle: 'Gefahrenzone',
       dangerDesc: 'Dies löscht dein Profil dauerhaft und entfernt dich aus Events.',
       delete: 'Konto löschen',
@@ -100,8 +103,12 @@ const de = {
         push: 'Push-Mitteilungen',
         purchaseReminders: 'Kauferinnerungen',
         purchaseRemindersDesc: 'Erhalte Benachrichtigungen, um reservierte Artikel vor Events zu kaufen',
+        instantNotifications: 'Sofortbenachrichtigungen',
+        instantNotificationsDesc: 'Werde sofort benachrichtigt, wenn Listen, Artikel oder Reservierungen erstellt werden',
+        instantNotificationsUpdated: 'Sofortbenachrichtigungen aktualisiert',
         activityDigest: 'Aktivitätszusammenfassung',
         activityDigestDesc: 'Erhalte eine Übersicht über Aktivitäten in deinen Events',
+        digestTimezoneNote: 'Times are in your local timezone',
         digestFrequency: 'Häufigkeit',
         digestDay: 'Tag',
         digestTime: 'Zustellzeit',
@@ -623,6 +630,35 @@ const de = {
       alertInvalidTitle: 'Ungültiger Code',
       alertInvalidBody: 'Dieser Beitrittscode wurde nicht gefunden.',
       alertFailedTitle: 'Beitritt fehlgeschlagen',
+    },
+
+    premium: {
+      upgradeRequired: {
+        title: 'Upgrade erforderlich',
+        featureMessage: 'Diese Funktion erfordert ein Premium-Abonnement. Upgrade, um Kauferinnerungen, Aktivitätszusammenfassungen, Zufallszuweisung und mehr freizuschalten!',
+        eventLimitMessage: 'Sie können bis zu 3 Events im kostenlosen Plan erstellen. Upgrade für unbegrenzte Events!',
+        joinLimitMessage: 'Sie können im kostenlosen Plan Mitglied von bis zu 3 Events sein. Upgrade für unbegrenzte Events oder verlassen Sie zunächst ein bestehendes Event.',
+        eventAccessMessage: 'Sie können im kostenlosen Plan auf bis zu 3 Events zugreifen. Dieses Event ist gesperrt. Upgrade für Zugriff auf alle Ihre Events.',
+        genericMessage: 'Dies erfordert ein Premium-Abonnement. Upgrade, um alle Funktionen freizuschalten!',
+        cancel: 'Abbrechen',
+        upgrade: 'Upgrade',
+      },
+      purchaseSuccess: {
+        title: 'Willkommen bei Premium!',
+        message: 'Alle Premium-Funktionen freigeschaltet!',
+      },
+      purchaseError: {
+        title: 'Kauf fehlgeschlagen',
+        message: 'Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.',
+      },
+      paywallError: {
+        title: 'Laden nicht möglich',
+        message: 'Abonnementoptionen konnten nicht geladen werden.',
+      },
+      restoreSuccess: {
+        title: 'Käufe wiederhergestellt',
+        message: 'Ihr Abonnement wurde wiederhergestellt!',
+      },
     },
 
     support: {

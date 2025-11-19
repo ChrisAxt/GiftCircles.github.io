@@ -1,0 +1,144 @@
+table_name,column_name,data_type,column_default,is_nullable,character_maximum_length
+claim_split_requests,id,uuid,gen_random_uuid(),NO,null
+claim_split_requests,item_id,uuid,null,NO,null
+claim_split_requests,requester_id,uuid,null,NO,null
+claim_split_requests,original_claimer_id,uuid,null,NO,null
+claim_split_requests,status,text,'pending'::text,NO,null
+claim_split_requests,created_at,timestamp with time zone,now(),YES,null
+claim_split_requests,responded_at,timestamp with time zone,null,YES,null
+claims,id,uuid,gen_random_uuid(),NO,null
+claims,item_id,uuid,null,NO,null
+claims,claimer_id,uuid,null,NO,null
+claims,quantity,integer,1,NO,null
+claims,note,text,null,YES,null
+claims,created_at,timestamp with time zone,now(),YES,null
+claims,purchased,boolean,false,NO,null
+claims,assigned_to,uuid,null,YES,null
+daily_activity_log,id,uuid,gen_random_uuid(),NO,null
+daily_activity_log,user_id,uuid,null,NO,null
+daily_activity_log,event_id,uuid,null,NO,null
+daily_activity_log,activity_type,text,null,NO,null
+daily_activity_log,activity_data,jsonb,null,NO,null
+daily_activity_log,created_at,timestamp with time zone,now(),YES,null
+event_invites,id,uuid,gen_random_uuid(),NO,null
+event_invites,event_id,uuid,null,NO,null
+event_invites,inviter_id,uuid,null,NO,null
+event_invites,invitee_email,text,null,NO,null
+event_invites,invitee_id,uuid,null,YES,null
+event_invites,status,text,'pending'::text,NO,null
+event_invites,invited_at,timestamp with time zone,now(),YES,null
+event_invites,responded_at,timestamp with time zone,null,YES,null
+event_invites,invited_role,USER-DEFINED,'giver'::member_role,NO,null
+event_member_stats,event_id,uuid,null,NO,null
+event_member_stats,user_id,uuid,null,NO,null
+event_member_stats,total_claims,bigint,0,NO,null
+event_member_stats,unpurchased_claims,bigint,0,NO,null
+event_member_stats,updated_at,timestamp with time zone,now(),NO,null
+event_members,event_id,uuid,null,NO,null
+event_members,user_id,uuid,null,NO,null
+event_members,role,USER-DEFINED,'giver'::member_role,NO,null
+event_members,created_at,timestamp with time zone,now(),YES,null
+events,id,uuid,gen_random_uuid(),NO,null
+events,title,text,null,NO,null
+events,description,text,null,YES,null
+events,event_date,date,null,YES,null
+events,join_code,text,"replace((gen_random_uuid())::text, '-'::text, ''::text)",NO,null
+events,owner_id,uuid,null,NO,null
+events,created_at,timestamp with time zone,now(),YES,null
+events,recurrence,text,'none'::text,NO,null
+events,last_rolled_at,date,null,YES,null
+events,admin_only_invites,boolean,false,NO,null
+items,id,uuid,gen_random_uuid(),NO,null
+items,list_id,uuid,null,NO,null
+items,name,text,null,NO,null
+items,url,text,null,YES,null
+items,price,numeric,null,YES,null
+items,notes,text,null,YES,null
+items,created_by,uuid,null,NO,null
+items,created_at,timestamp with time zone,now(),YES,null
+items,assigned_recipient_id,uuid,null,YES,null
+list_exclusions,list_id,uuid,null,NO,null
+list_exclusions,user_id,uuid,null,NO,null
+list_exclusions,created_at,timestamp with time zone,now(),NO,null
+list_recipients,list_id,uuid,null,NO,null
+list_recipients,user_id,uuid,null,YES,null
+list_recipients,can_view,boolean,true,NO,null
+list_recipients,recipient_email,text,null,YES,null
+list_recipients,id,uuid,gen_random_uuid(),NO,null
+list_viewers,list_id,uuid,null,NO,null
+list_viewers,user_id,uuid,null,NO,null
+lists,id,uuid,gen_random_uuid(),NO,null
+lists,event_id,uuid,null,NO,null
+lists,name,text,null,NO,null
+lists,created_by,uuid,null,NO,null
+lists,created_at,timestamp with time zone,now(),YES,null
+lists,visibility,USER-DEFINED,'event'::list_visibility,NO,null
+lists,custom_recipient_name,text,null,YES,null
+lists,random_assignment_enabled,boolean,false,NO,null
+lists,random_assignment_mode,text,null,YES,null
+lists,random_assignment_executed_at,timestamp with time zone,null,YES,null
+lists,random_receiver_assignment_enabled,boolean,false,NO,null
+lists,for_everyone,boolean,false,NO,null
+notification_queue,id,uuid,gen_random_uuid(),NO,null
+notification_queue,user_id,uuid,null,NO,null
+notification_queue,title,text,null,NO,null
+notification_queue,body,text,null,NO,null
+notification_queue,data,jsonb,null,YES,null
+notification_queue,sent,boolean,false,YES,null
+notification_queue,created_at,timestamp with time zone,now(),YES,null
+orphaned_lists,id,uuid,gen_random_uuid(),NO,null
+orphaned_lists,list_id,uuid,null,NO,null
+orphaned_lists,event_id,uuid,null,NO,null
+orphaned_lists,excluded_user_id,uuid,null,NO,null
+orphaned_lists,marked_at,timestamp with time zone,now(),NO,null
+orphaned_lists,delete_at,timestamp with time zone,(now() + '30 days'::interval),NO,null
+orphaned_lists,created_at,timestamp with time zone,now(),NO,null
+profiles,id,uuid,null,NO,null
+profiles,display_name,text,null,YES,null
+profiles,avatar_url,text,null,YES,null
+profiles,created_at,timestamp with time zone,now(),YES,null
+profiles,onboarding_done,boolean,false,NO,null
+profiles,onboarding_at,timestamp with time zone,null,YES,null
+profiles,plan,text,'free'::text,NO,null
+profiles,pro_until,timestamp with time zone,null,YES,null
+profiles,reminder_days,integer,null,YES,null
+profiles,currency,character varying,'USD'::character varying,YES,3
+profiles,notification_digest_enabled,boolean,false,YES,null
+profiles,digest_time_hour,integer,9,YES,null
+profiles,digest_frequency,text,'daily'::text,YES,null
+profiles,digest_day_of_week,integer,1,YES,null
+profiles,last_support_screen_shown,timestamp with time zone,null,YES,null
+profiles,timezone,text,'UTC'::text,YES,null
+profiles,manual_pro,boolean,false,YES,null
+profiles,instant_notifications_enabled,boolean,false,YES,null
+push_tokens,id,uuid,gen_random_uuid(),NO,null
+push_tokens,user_id,uuid,null,NO,null
+push_tokens,token,text,null,NO,null
+push_tokens,platform,text,null,NO,null
+push_tokens,created_at,timestamp with time zone,now(),YES,null
+push_tokens,updated_at,timestamp with time zone,now(),YES,null
+rate_limit_tracking,user_id,uuid,null,NO,null
+rate_limit_tracking,action,text,null,NO,null
+rate_limit_tracking,window_start,timestamp with time zone,null,NO,null
+rate_limit_tracking,request_count,integer,1,NO,null
+security_audit_log,id,uuid,gen_random_uuid(),NO,null
+security_audit_log,user_id,uuid,null,YES,null
+security_audit_log,action,text,null,NO,null
+security_audit_log,resource_type,text,null,YES,null
+security_audit_log,resource_id,uuid,null,YES,null
+security_audit_log,ip_address,inet,null,YES,null
+security_audit_log,user_agent,text,null,YES,null
+security_audit_log,success,boolean,null,NO,null
+security_audit_log,error_message,text,null,YES,null
+security_audit_log,metadata,jsonb,null,YES,null
+security_audit_log,created_at,timestamp with time zone,now(),NO,null
+sent_reminders,id,uuid,gen_random_uuid(),NO,null
+sent_reminders,user_id,uuid,null,NO,null
+sent_reminders,claim_id,uuid,null,NO,null
+sent_reminders,event_id,uuid,null,NO,null
+sent_reminders,sent_at,timestamp with time zone,now(),YES,null
+user_plans,user_id,uuid,null,NO,null
+user_plans,pro_until,timestamp with time zone,null,YES,null
+user_plans,created_at,timestamp with time zone,now(),NO,null
+user_plans,updated_at,timestamp with time zone,now(),NO,null
+user_plans,note,text,null,YES,null

@@ -108,6 +108,12 @@ export function handleNotificationNavigation(
       navigationRef.current.navigate('Home', { screen: 'Claimed' });
       break;
 
+    case 'digest':
+      // Daily/weekly digest notification
+      // Navigate to Events screen to see overview of activity
+      navigationRef.current.navigate('Home', { screen: 'Events' });
+      break;
+
     default:
       // Default to home screen for unknown notification types
       navigationRef.current.navigate('Home');

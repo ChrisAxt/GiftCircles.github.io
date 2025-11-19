@@ -12,6 +12,7 @@ import { useTheme } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
 import { useSettings } from '../theme/SettingsProvider';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 
 const MAX_FREE_EVENTS = 3;
 
@@ -103,21 +104,12 @@ export default function CreateEventScreen({ navigation }: any) {
       .eq('owner_id', userId);
 
     if (error) {
-      Alert.alert(
-        t('billing.upgradeRequiredTitle', 'Upgrade required'),
-        t(
-          'billing.upgradeRequiredCreateBody',
-          'We could not verify your quota. You can create up to 3 events on Free. Subscribe to create more.'
-        )
-      );
+      showUpgradePrompt({ reason: 'eventLimit', t });
       return false;
     }
 
     if ((count ?? 0) >= MAX_FREE_EVENTS) {
-      Alert.alert(
-        t('billing.upgradeRequiredTitle', 'Upgrade required'),
-        t('billing.upgradeRequiredCreateBody', 'You can create up to 3 events on Free. Subscribe to create more.')
-      );
+      showUpgradePrompt({ reason: 'eventLimit', t });
       return false;
     }
     return true;

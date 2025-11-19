@@ -1,0 +1,10 @@
+jobid,schedule,command,nodename,nodeport,database,username,active,jobname
+1,15 * * * *,select public.rollover_all_due_events();,localhost,5432,postgres,postgres,true,rollover-events-hourly
+28,0 3 * * *,SELECT public.cleanup_old_reminders();,localhost,5432,postgres,postgres,true,cleanup-old-reminders
+29,0 3 * * *,SELECT cleanup_orphaned_lists();,localhost,5432,postgres,postgres,true,cleanup-orphaned-lists
+30,0 * * * *,SELECT public.trigger_daily_digest();,localhost,5432,postgres,postgres,true,process-daily-digest
+31,0 4 * * *,SELECT public.cleanup_old_activity_logs();,localhost,5432,postgres,postgres,true,cleanup-old-activity-logs
+33,0 * * * *,SELECT public.cleanup_rate_limit_tracking();,localhost,5432,postgres,postgres,true,cleanup-rate-limits
+15,* * * * *,select public.trigger_push_notifications();,localhost,5432,postgres,postgres,true,process-push-notifications
+19,0 9 * * *,SELECT public.check_and_queue_purchase_reminders(),localhost,5432,postgres,postgres,true,check-purchase-reminders
+27,0 3 * * *,SELECT public.cleanup_old_notifications();,localhost,5432,postgres,postgres,true,cleanup-old-notifications

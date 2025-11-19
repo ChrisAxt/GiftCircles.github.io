@@ -14,7 +14,7 @@
     "test:ci": "jest --ci",
     "db:test:pgtap": "pg_prove -d \"$SUPABASE_DB_URL\" supabase/tests/**/*.sql",
     "db:test:smoke": "psql \"$SUPABASE_DB_URL\" -v ON_ERROR_STOP=1 -f supabase/tests/smoke/run_all.sql",
-    "test:db": "jest --runInBand __tests__/db"
+    "test:db": "jest --runInBand --config supabase/tests/db/jest.config.db.cjs supabase/tests/db"
   },
   "dependencies": {
     "@expo/metro-runtime": "~6.1.2",
@@ -43,6 +43,8 @@
     "react-native-gesture-handler": "~2.28.0",
     "react-native-localize": "^3.5.2",
     "react-native-pager-view": "6.9.1",
+    "react-native-purchases": "^9.6.4",
+    "react-native-purchases-ui": "^9.6.4",
     "react-native-reanimated": "^3.15.5",
     "react-native-safe-area-context": "~5.6.0",
     "react-native-screens": "~4.16.0",
@@ -61,6 +63,7 @@
     "jest-expo": "54.0.12",
     "react-test-renderer": "19.1.0",
     "supabase": "^2.40.7",
+    "ts-jest": "^29.4.5",
     "typescript": "5.9.2"
   }
 }

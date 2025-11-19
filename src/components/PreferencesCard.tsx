@@ -6,8 +6,10 @@ import {
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import * as Notifications from 'expo-notifications';
 import Constants from 'expo-constants';
+import * as Localization from 'expo-localization';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 import { useSettings } from '../theme/SettingsProvider';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '@react-navigation/native';
@@ -31,9 +33,12 @@ export default function PreferencesCard() {
   const [digestFrequency, setDigestFrequency] = useState<'daily' | 'weekly'>('daily');
   const [digestDayOfWeek, setDigestDayOfWeek] = useState<number>(1);
   const [loadingDigest, setLoadingDigest] = useState(false);
+  const [isPro, setIsPro] = useState(false);
+  const [instantNotificationsEnabled, setInstantNotificationsEnabled] = useState<boolean>(false);
+  const [loadingInstantNotifications, setLoadingInstantNotifications] = useState(false);
   const { t, i18n } = useTranslation();
 
-  // Load cached push state, reminder preference, currency, and digest
+  // Load cached push state, reminder preference, currency, digest, instant notifications, and pro status
   React.useEffect(() => {
     (async () => {
       const pushValue = await AsyncStorage.getItem('pref.pushEnabled');
@@ -41,8 +46,29 @@ export default function PreferencesCard() {
       await loadReminderDays();
       await loadCurrency();
       await loadDigestPreferences();
+      await loadInstantNotificationsPreference();
+      await loadProStatus();
     })();
   }, []);
+
+  const loadProStatus = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('plan, pro_until, manual_pro')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      // Check if user is pro: manual_pro OR plan is 'pro' OR pro_until is in the future
+      const userIsPro = data?.manual_pro === true || data?.plan === 'pro' || (data?.pro_until && new Date(data.pro_until) > new Date());
+      setIsPro(!!userIsPro);
+    } catch (e) {
+      // Error loading pro status
+    }
+  };
 
   const loadReminderDays = async () => {
     try {
@@ -106,6 +132,25 @@ export default function PreferencesCard() {
       }
     } catch (e) {
       // Error loading digest preferences
+    }
+  };
+
+  const loadInstantNotificationsPreference = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const { data } = await supabase
+        .from('profiles')
+        .select('instant_notifications_enabled')
+        .eq('id', user.id)
+        .maybeSingle();
+
+      if (data) {
+        setInstantNotificationsEnabled(data.instant_notifications_enabled ?? false);
+      }
+    } catch (e) {
+      // Error loading instant notifications preference
     }
   };
   const setPushLocal = async (b: boolean) => {
@@ -211,7 +256,12 @@ export default function PreferencesCard() {
     setLangOpen(false);
   };
 
+
   const updateReminderDays = async (days: number) => {
+    if (!isPro) {
+      showUpgradePrompt({ reason: 'feature', t });
+      return;
+    }
     if (loadingReminder) return;
     setLoadingReminder(true);
     try {
@@ -259,6 +309,11 @@ export default function PreferencesCard() {
   };
 
   const toggleDigest = async () => {
+    if (!isPro && !digestEnabled) {
+      // Show upgrade prompt when trying to enable (not when disabling)
+      showUpgradePrompt({ reason: 'feature', t });
+      return;
+    }
     if (loadingDigest) return;
     setLoadingDigest(true);
     try {
@@ -266,9 +321,26 @@ export default function PreferencesCard() {
       if (!user) return;
 
       const newValue = !digestEnabled;
+
+      // Auto-detect timezone when enabling digest
+      let timezone = 'UTC';
+      if (newValue) {
+        try {
+          // Get device timezone (IANA format like "America/New_York")
+          timezone = Localization.getCalendars()[0]?.timeZone || Localization.timezone || 'UTC';
+        } catch (e) {
+          // Fall back to UTC if detection fails
+          timezone = 'UTC';
+        }
+      }
+
+      const updateData = newValue
+        ? { notification_digest_enabled: newValue, timezone }
+        : { notification_digest_enabled: newValue };
+
       const { error } = await supabase
         .from('profiles')
-        .update({ notification_digest_enabled: newValue })
+        .update(updateData)
         .eq('id', user.id);
 
       if (error) throw error;
@@ -351,6 +423,31 @@ export default function PreferencesCard() {
     }
   };
 
+  const toggleInstantNotifications = async () => {
+    if (loadingInstantNotifications) return;
+    setLoadingInstantNotifications(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      const newValue = !instantNotificationsEnabled;
+
+      const { error } = await supabase
+        .from('profiles')
+        .update({ instant_notifications_enabled: newValue })
+        .eq('id', user.id);
+
+      if (error) throw error;
+
+      setInstantNotificationsEnabled(newValue);
+      toast.success(t('profile.settings.instantNotificationsUpdated', 'Instant notifications updated'));
+    } catch (e: any) {
+      toast.error(t('profile.alerts.updateFailed', 'Update failed'), { text2: e?.message ?? String(e) });
+    } finally {
+      setLoadingInstantNotifications(false);
+    }
+  };
+
   return (
     <View
       style={{
@@ -392,24 +489,53 @@ export default function PreferencesCard() {
         </View>
       )}
 
-      {/* Purchase Reminders */}
-      {reminderDays !== null && (
-        <View style={{ marginTop: 12 }}>
-          <Text style={{ fontWeight: '600', marginBottom: 6, color: colors.text }}>
-            {t('profile.settings.purchaseReminders', 'Purchase Reminders')}
+      {/* Instant Notifications */}
+      <View style={{ marginTop: 12, opacity: !pushEnabled ? 0.5 : 1 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+          <Text style={{ fontWeight: '600', color: colors.text }}>
+            {t('profile.settings.instantNotifications', 'Instant Notifications')}
           </Text>
-          <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
-            {t('profile.settings.purchaseRemindersDesc', 'Get notified to purchase claimed items before events')}
-          </Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
-            <Chip active={reminderDays === 0} label={t('profile.common.off')} onPress={() => updateReminderDays(0)} />
-            <Chip active={reminderDays === 1} label={t('profile.common.1day')} onPress={() => updateReminderDays(1)} />
-            <Chip active={reminderDays === 3} label={t('profile.common.3days')} onPress={() => updateReminderDays(3)} />
-            <Chip active={reminderDays === 7} label={t('profile.common.7days')} onPress={() => updateReminderDays(7)} />
-            <Chip active={reminderDays === 14} label={t('profile.common.14days')} onPress={() => updateReminderDays(14)} />
-          </View>
+          <Pressable
+            onPress={toggleInstantNotifications}
+            disabled={loadingInstantNotifications || !pushEnabled}
+            style={{
+              backgroundColor: instantNotificationsEnabled ? '#2e95f1' : colors.card,
+              paddingVertical: 6,
+              paddingHorizontal: 12,
+              borderRadius: 999,
+              minWidth: 70,
+              alignItems: 'center',
+              opacity: loadingInstantNotifications ? 0.7 : 1,
+              borderWidth: instantNotificationsEnabled ? 0 : 1,
+              borderColor: instantNotificationsEnabled ? 'transparent' : colors.border,
+            }}
+          >
+            <Text style={{ color: instantNotificationsEnabled ? '#fff' : colors.text, fontWeight: '700' }}>
+              {instantNotificationsEnabled ? t('profile.common.on') : t('profile.common.off')}
+            </Text>
+          </Pressable>
         </View>
-      )}
+        <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
+          {t('profile.settings.instantNotificationsDesc', 'Get notified immediately when lists, items, or claims are created')}
+        </Text>
+      </View>
+
+      {/* Purchase Reminders */}
+      <View style={{ marginTop: 12 }}>
+        <Text style={{ fontWeight: '600', marginBottom: 6, color: colors.text }}>
+          {t('profile.settings.purchaseReminders', 'Purchase Reminders')}
+        </Text>
+        <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
+          {t('profile.settings.purchaseRemindersDesc', 'Get notified to purchase claimed items before events')}
+        </Text>
+        <View style={{ flexDirection: 'row', flexWrap: 'wrap' }}>
+          <Chip active={reminderDays === null || reminderDays === 0} label={t('profile.common.off')} onPress={() => updateReminderDays(0)} />
+          <Chip active={reminderDays === 1} label={t('profile.common.1day')} onPress={() => updateReminderDays(1)} />
+          <Chip active={reminderDays === 3} label={t('profile.common.3days')} onPress={() => updateReminderDays(3)} />
+          <Chip active={reminderDays === 7} label={t('profile.common.7days')} onPress={() => updateReminderDays(7)} />
+          <Chip active={reminderDays === 14} label={t('profile.common.14days')} onPress={() => updateReminderDays(14)} />
+        </View>
+      </View>
 
       {/* Activity Digest */}
       <View style={{ marginTop: 12 }}>
@@ -437,8 +563,11 @@ export default function PreferencesCard() {
             </Text>
           </Pressable>
         </View>
-        <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 8 }}>
+        <Text style={{ fontSize: 12, color: colors.text, opacity: 0.7, marginBottom: 4 }}>
           {t('profile.settings.activityDigestDesc', 'Receive a summary of activity in your events')}
+        </Text>
+        <Text style={{ fontSize: 11, color: colors.text, opacity: 0.6, marginBottom: 8, fontStyle: 'italic' }}>
+          {t('profile.settings.digestTimezoneNote', 'Times are in your local timezone')} ({Localization.getCalendars()[0]?.timeZone || Localization.timezone || 'UTC'})
         </Text>
         {digestEnabled && (
           <>

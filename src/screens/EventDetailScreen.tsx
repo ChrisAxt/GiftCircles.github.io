@@ -16,6 +16,7 @@ import { Screen } from '../components/Screen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../components/TopBar';
 import { InviteUserModal } from '../components/InviteUserModal';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 
 type MemberRow = { event_id: string; user_id: string; role: 'giver' | 'recipient' | 'admin' };
 type ListRow = { id: string; event_id: string; name: string; custom_recipient_name?: string | null };
@@ -93,7 +94,7 @@ export default function EventDetailScreen({ route, navigation }: any) {
         if (accErr) {
           // Error checking access
         } else if (allowed === false) {
-          Alert.alert('Upgrade required', 'You can access up to 3 events on Free.');
+          showUpgradePrompt({ reason: 'eventAccess', t });
           if (navigation.canGoBack()) navigation.goBack();
           else navigation.navigate('Events');
           return;

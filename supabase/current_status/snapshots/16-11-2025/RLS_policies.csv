@@ -1,0 +1,115 @@
+schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check
+public,claim_split_requests,Original claimers can update split requests,PERMISSIVE,{public},UPDATE,(original_claimer_id = ( SELECT auth.uid() AS uid)),null
+public,claim_split_requests,Requesters can delete their pending requests,PERMISSIVE,{public},DELETE,((requester_id = ( SELECT auth.uid() AS uid)) AND (status = 'pending'::text)),null
+public,claim_split_requests,Users can create split requests,PERMISSIVE,{public},INSERT,null,(requester_id = ( SELECT auth.uid() AS uid))
+public,claim_split_requests,Users can view their split requests,PERMISSIVE,{public},SELECT,((requester_id = ( SELECT auth.uid() AS uid)) OR (original_claimer_id = ( SELECT auth.uid() AS uid))),null
+public,claims,admins can delete any claims,PERMISSIVE,{public},DELETE,"is_event_admin(event_id_for_item(item_id), ( SELECT auth.uid() AS uid))",null
+public,claims,claims_delete_admins,RESTRICTIVE,{authenticated},DELETE,is_event_admin(event_id_for_item(item_id)),null
+public,claims,claims_select_visible,PERMISSIVE,{public},SELECT,"((claimer_id = auth.uid()) OR can_view_list(list_id_for_item(item_id), auth.uid()))",null
+public,claims,claims_update_by_claimer,PERMISSIVE,{public},UPDATE,(( SELECT auth.uid() AS uid) = claimer_id),(( SELECT auth.uid() AS uid) = claimer_id)
+public,claims,claims_update_own,PERMISSIVE,{public},UPDATE,(( SELECT auth.uid() AS uid) = claimer_id),(( SELECT auth.uid() AS uid) = claimer_id)
+public,claims,delete own claims,PERMISSIVE,{public},DELETE,(claimer_id = ( SELECT auth.uid() AS uid)),null
+public,daily_activity_log,No public access to activity log,PERMISSIVE,{public},ALL,false,null
+public,event_invites,event_invites_delete,PERMISSIVE,{public},DELETE,"((( SELECT auth.uid() AS uid) = inviter_id) OR (EXISTS ( SELECT 1
+   FROM event_members em
+  WHERE ((em.event_id = event_invites.event_id) AND (em.user_id = ( SELECT auth.uid() AS uid)) AND (em.role = 'admin'::member_role)))))",null
+public,event_invites,event_invites_insert,PERMISSIVE,{public},INSERT,null,"((( SELECT auth.uid() AS uid) = inviter_id) AND (EXISTS ( SELECT 1
+   FROM event_members em
+  WHERE ((em.event_id = event_invites.event_id) AND (em.user_id = ( SELECT auth.uid() AS uid))))))"
+public,event_invites,event_invites_select,PERMISSIVE,{public},SELECT,"((( SELECT auth.uid() AS uid) = inviter_id) OR (( SELECT auth.uid() AS uid) = invitee_id) OR (EXISTS ( SELECT 1
+   FROM event_members em
+  WHERE ((em.event_id = event_invites.event_id) AND (em.user_id = ( SELECT auth.uid() AS uid))))))",null
+public,event_invites,event_invites_update,PERMISSIVE,{public},UPDATE,(( SELECT auth.uid() AS uid) = invitee_id),null
+public,event_member_stats,event_member_stats_no_delete,PERMISSIVE,{public},DELETE,false,null
+public,event_member_stats,event_member_stats_no_insert,PERMISSIVE,{public},INSERT,null,false
+public,event_member_stats,event_member_stats_no_update,PERMISSIVE,{public},UPDATE,false,null
+public,event_member_stats,event_member_stats_select,PERMISSIVE,{public},SELECT,(user_id = ( SELECT auth.uid() AS uid)),null
+public,event_members,delete own event membership,PERMISSIVE,{public},DELETE,(user_id = ( SELECT auth.uid() AS uid)),null
+public,event_members,event_members_select,PERMISSIVE,{public},SELECT,"is_member_of_event(event_id, ( SELECT auth.uid() AS uid))",null
+public,events,admins can delete events,PERMISSIVE,{public},DELETE,"is_event_admin(id, ( SELECT auth.uid() AS uid))",null
+public,events,delete events by owner or last member,PERMISSIVE,{public},DELETE,"((owner_id = ( SELECT auth.uid() AS uid)) OR is_last_event_member(id, ( SELECT auth.uid() AS uid)))",null
+public,events,events: update by admins,PERMISSIVE,{public},UPDATE,"(EXISTS ( SELECT 1
+   FROM event_members em
+  WHERE ((em.event_id = events.id) AND (em.user_id = ( SELECT auth.uid() AS uid)) AND (em.role = 'admin'::member_role))))","(EXISTS ( SELECT 1
+   FROM event_members em
+  WHERE ((em.event_id = events.id) AND (em.user_id = ( SELECT auth.uid() AS uid)) AND (em.role = 'admin'::member_role))))"
+public,events,insert events when owner is self,PERMISSIVE,{public},INSERT,null,(owner_id = ( SELECT auth.uid() AS uid))
+public,events,owners can delete events,PERMISSIVE,{public},DELETE,(owner_id = ( SELECT auth.uid() AS uid)),null
+public,events,select events for members,PERMISSIVE,{public},SELECT,"is_event_member(id, ( SELECT auth.uid() AS uid))",null
+public,events,select events for owners,PERMISSIVE,{public},SELECT,(owner_id = ( SELECT auth.uid() AS uid)),null
+public,events,update events by owner or last member,PERMISSIVE,{public},UPDATE,"((owner_id = ( SELECT auth.uid() AS uid)) OR is_last_event_member(id, ( SELECT auth.uid() AS uid)))","((owner_id = ( SELECT auth.uid() AS uid)) OR is_last_event_member(id, ( SELECT auth.uid() AS uid)))"
+public,items,delete items by creator or last member,PERMISSIVE,{public},DELETE,"((created_by = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = items.list_id) AND ((l.created_by = ( SELECT auth.uid() AS uid)) OR is_last_event_member(l.event_id, ( SELECT auth.uid() AS uid)))))))",null
+public,items,items_select_with_receiver_assignment,PERMISSIVE,{public},SELECT,"((EXISTS ( SELECT 1
+   FROM claims c
+  WHERE ((c.item_id = items.id) AND (c.claimer_id = auth.uid())))) OR (EXISTS ( SELECT 1
+   FROM (lists l
+     JOIN event_members em ON ((em.event_id = l.event_id)))
+  WHERE ((l.id = items.list_id) AND (em.user_id = auth.uid()) AND can_view_list(l.id, auth.uid()) AND (((l.random_assignment_enabled = true) AND (l.random_receiver_assignment_enabled = true)) OR (l.created_by = auth.uid()) OR (em.role = 'admin'::member_role) OR (EXISTS ( SELECT 1
+           FROM events e
+          WHERE ((e.id = l.event_id) AND (e.owner_id = auth.uid())))) OR ((l.random_assignment_enabled = true) AND (COALESCE(l.random_receiver_assignment_enabled, false) = false) AND ((l.random_assignment_executed_at IS NULL) OR (EXISTS ( SELECT 1
+           FROM claims c
+          WHERE ((c.item_id = items.id) AND (c.assigned_to = auth.uid())))))) OR ((COALESCE(l.random_assignment_enabled, false) = false) AND (l.random_receiver_assignment_enabled = true) AND (items.assigned_recipient_id <> auth.uid())) OR ((COALESCE(l.random_assignment_enabled, false) = false) AND (COALESCE(l.random_receiver_assignment_enabled, false) = false)))))))",null
+public,items,members can insert items into their event lists,PERMISSIVE,{public},INSERT,null,"((( SELECT auth.role() AS role) = 'authenticated'::text) AND (created_by = ( SELECT auth.uid() AS uid)) AND (EXISTS ( SELECT 1
+   FROM (lists l
+     JOIN event_members em ON ((em.event_id = l.event_id)))
+  WHERE ((l.id = items.list_id) AND (em.user_id = ( SELECT auth.uid() AS uid))))))"
+public,items,members can select items in their events,PERMISSIVE,{public},SELECT,"((EXISTS ( SELECT 1
+   FROM (lists l
+     JOIN event_members em ON ((em.event_id = l.event_id)))
+  WHERE ((l.id = items.list_id) AND (em.user_id = auth.uid())))) OR (EXISTS ( SELECT 1
+   FROM claims c
+  WHERE ((c.item_id = items.id) AND (c.claimer_id = auth.uid())))))",null
+public,items,update items by creator or last member,PERMISSIVE,{public},UPDATE,"((created_by = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = items.list_id) AND ((l.created_by = ( SELECT auth.uid() AS uid)) OR is_last_event_member(l.event_id, ( SELECT auth.uid() AS uid)))))))",null
+public,list_exclusions,le_select,PERMISSIVE,{public},SELECT,(user_id = ( SELECT auth.uid() AS uid)),null
+public,list_exclusions,list_exclusions_delete,PERMISSIVE,{public},DELETE,"(EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_exclusions.list_id) AND ((l.created_by = ( SELECT auth.uid() AS uid)) OR (EXISTS ( SELECT 1
+           FROM event_members em
+          WHERE ((em.event_id = l.event_id) AND (em.user_id = ( SELECT auth.uid() AS uid)) AND (em.role = 'admin'::member_role))))))))",null
+public,list_exclusions,list_exclusions_insert,PERMISSIVE,{authenticated},INSERT,null,"(EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_exclusions.list_id) AND (l.created_by = ( SELECT auth.uid() AS uid)))))"
+public,list_exclusions,list_exclusions_select,PERMISSIVE,{authenticated},SELECT,"((EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_exclusions.list_id) AND (l.created_by = ( SELECT auth.uid() AS uid))))) OR (user_id = ( SELECT auth.uid() AS uid)))",null
+public,list_recipients,delete list_recipients by creator or last member,PERMISSIVE,{public},DELETE,"(EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_recipients.list_id) AND ((l.created_by = ( SELECT auth.uid() AS uid)) OR is_last_event_member(l.event_id, ( SELECT auth.uid() AS uid))))))",null
+public,list_recipients,insert list_recipients by creator,PERMISSIVE,{public},INSERT,null,"(EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_recipients.list_id) AND (l.created_by = ( SELECT auth.uid() AS uid)))))"
+public,list_recipients,list_recipients_insert,PERMISSIVE,{public},INSERT,null,"(EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_recipients.list_id) AND (l.created_by = ( SELECT auth.uid() AS uid)))))"
+public,list_recipients,list_recipients_select,PERMISSIVE,{public},SELECT,"can_view_list(list_id, ( SELECT auth.uid() AS uid))",null
+public,list_recipients,update list_recipients by creator or last member,PERMISSIVE,{public},UPDATE,"(EXISTS ( SELECT 1
+   FROM lists l
+  WHERE ((l.id = list_recipients.list_id) AND ((l.created_by = ( SELECT auth.uid() AS uid)) OR is_last_event_member(l.event_id, ( SELECT auth.uid() AS uid))))))",null
+public,list_viewers,lv_select,PERMISSIVE,{public},SELECT,(user_id = ( SELECT auth.uid() AS uid)),null
+public,lists,delete lists by creator or last member,PERMISSIVE,{public},DELETE,"((created_by = ( SELECT auth.uid() AS uid)) OR is_last_event_member(event_id, ( SELECT auth.uid() AS uid)))",null
+public,lists,lists_delete_admins,RESTRICTIVE,{authenticated},DELETE,is_event_admin(event_id),null
+public,lists,lists_insert,RESTRICTIVE,{authenticated},INSERT,null,is_event_member(event_id)
+public,lists,lists_select_visible,PERMISSIVE,{public},SELECT,"can_view_list(id, auth.uid())",null
+public,lists,update lists by creator or last member,PERMISSIVE,{public},UPDATE,"((created_by = ( SELECT auth.uid() AS uid)) OR is_last_event_member(event_id, ( SELECT auth.uid() AS uid)))",null
+public,notification_queue,No public access to notification queue,PERMISSIVE,{public},ALL,false,null
+public,orphaned_lists,orphaned_lists_select,PERMISSIVE,{public},SELECT,false,null
+public,profiles,profiles are readable by logged in users,PERMISSIVE,{authenticated},SELECT,true,null
+public,profiles,server-side insert when id exists in auth.users,PERMISSIVE,{public},INSERT,null,"(EXISTS ( SELECT 1
+   FROM auth.users u
+  WHERE (u.id = profiles.id)))"
+public,profiles,users can insert their own profile,PERMISSIVE,{public},INSERT,null,(id = ( SELECT auth.uid() AS uid))
+public,profiles,users can update their own profile,PERMISSIVE,{public},UPDATE,(id = ( SELECT auth.uid() AS uid)),(id = ( SELECT auth.uid() AS uid))
+public,push_tokens,Users can delete own tokens,PERMISSIVE,{public},DELETE,(user_id = ( SELECT auth.uid() AS uid)),null
+public,push_tokens,Users can insert own tokens,PERMISSIVE,{public},INSERT,null,(user_id = ( SELECT auth.uid() AS uid))
+public,push_tokens,Users can update own tokens,PERMISSIVE,{public},UPDATE,(user_id = ( SELECT auth.uid() AS uid)),(user_id = ( SELECT auth.uid() AS uid))
+public,push_tokens,Users can view own tokens,PERMISSIVE,{public},SELECT,(user_id = ( SELECT auth.uid() AS uid)),null
+public,rate_limit_tracking,rate_limit_tracking_no_public_access,PERMISSIVE,{public},ALL,false,false
+public,security_audit_log,security_audit_log_no_public_access,PERMISSIVE,{public},ALL,false,null
+public,sent_reminders,No public access to sent_reminders,PERMISSIVE,{public},ALL,false,false
+public,user_plans,no_client_writes,PERMISSIVE,{authenticated},ALL,false,false
+public,user_plans,read_own_plan,PERMISSIVE,{authenticated},SELECT,(( SELECT auth.uid() AS uid) = user_id),null
+public,user_plans,user_plans_self,PERMISSIVE,{public},ALL,(user_id = ( SELECT auth.uid() AS uid)),(user_id = ( SELECT auth.uid() AS uid))

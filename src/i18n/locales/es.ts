@@ -78,6 +78,9 @@ const es = {
         cancel: 'Quizás más tarde',
         confirm: 'Apóyanos',
       },
+      manageSubscription: {
+        button: '⭐ Administrar suscripción',
+      },
       dangerTitle: 'Zona de riesgo',
       dangerDesc: 'Esto eliminará tu perfil de forma permanente y te quitará de los eventos.',
       delete: 'Eliminar cuenta',
@@ -105,8 +108,12 @@ const es = {
         push: 'Notificaciones push',
         purchaseReminders: 'Recordatorios de compra',
         purchaseRemindersDesc: 'Recibe notificaciones para comprar artículos reservados antes de los eventos',
+        instantNotifications: 'Notificaciones Instantáneas',
+        instantNotificationsDesc: 'Recibe notificaciones inmediatamente cuando se crean listas, artículos o reservas',
+        instantNotificationsUpdated: 'Notificaciones instantáneas actualizadas',
         activityDigest: 'Resumen de Actividad',
         activityDigestDesc: 'Recibe un resumen de actividad en tus eventos',
+        digestTimezoneNote: 'Times are in your local timezone',
         digestFrequency: 'Frecuencia',
         digestDay: 'Día',
         digestTime: 'Hora de Entrega',
@@ -628,6 +635,35 @@ const es = {
       alertInvalidTitle: 'Código no válido',
       alertInvalidBody: 'No se encontró ese código.',
       alertFailedTitle: 'Error al unirse',
+    },
+
+    premium: {
+      upgradeRequired: {
+        title: 'Actualización requerida',
+        featureMessage: 'Esta función requiere una suscripción premium. ¡Actualiza para desbloquear recordatorios de compra, resúmenes de actividad, asignación aleatoria y más!',
+        eventLimitMessage: 'Puedes crear hasta 3 eventos en el plan gratuito. ¡Actualiza para crear eventos ilimitados!',
+        joinLimitMessage: 'Puedes ser miembro de hasta 3 eventos en el plan gratuito. ¡Actualiza para unirte a eventos ilimitados o sal de un evento existente primero!',
+        eventAccessMessage: 'Puedes acceder hasta 3 eventos en el plan gratuito. Este evento está bloqueado. ¡Actualiza para acceder a todos tus eventos!',
+        genericMessage: '¡Esto requiere una suscripción premium. Actualiza para desbloquear todas las funciones!',
+        cancel: 'Cancelar',
+        upgrade: 'Actualizar',
+      },
+      purchaseSuccess: {
+        title: '¡Bienvenido a Premium!',
+        message: '¡Todas las funciones premium desbloqueadas!',
+      },
+      purchaseError: {
+        title: 'Compra fallida',
+        message: 'Algo salió mal. Por favor, inténtelo de nuevo.',
+      },
+      paywallError: {
+        title: 'No se puede cargar',
+        message: 'No se pudieron cargar las opciones de suscripción.',
+      },
+      restoreSuccess: {
+        title: 'Compras restauradas',
+        message: '¡Tu suscripción ha sido restaurada!',
+      },
     },
 
     support: {

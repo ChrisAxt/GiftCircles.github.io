@@ -52,3 +52,81 @@ jest.mock('react-native-safe-area-context', () => {
     useSafeAreaInsets: () => inset,
   };
 });
+
+// Mock react-i18next to return translation keys as values
+jest.mock('react-i18next', () => ({
+  useTranslation: () => ({
+    t: (key: string, params?: any) => {
+      // Map common translation keys to their English values for tests
+      const translations: Record<string, string> = {
+        'claimButton.claim': 'Claim',
+        'claimButton.unclaim': 'Unclaim',
+        'claimButton.claimed': 'Claimed',
+        'claimButton.requestSplit': 'Request Split',
+        'common.loading': 'Loading...',
+        'common.error': 'Error',
+        'common.success': 'Success',
+        'myClaims.title': 'My claimed items',
+        'myClaims.fallbackItem': 'Unknown Item',
+        'myClaims.line': 'List item',
+        'myClaims.markPurchased': 'Mark as purchased',
+        'myClaims.purchased': 'Purchased',
+        'eventList.greeting': `Hi ${params?.name || 'there'}!`,
+        'eventList.title': 'Your Events',
+        'eventDetail.members': 'Members',
+        'eventDetail.lists': 'Lists',
+      };
+      return translations[key] || key;
+    },
+    i18n: {
+      changeLanguage: jest.fn(),
+      language: 'en',
+    },
+  }),
+  Trans: ({ children }: any) => children,
+  initReactI18next: { type: '3rdParty', init: jest.fn() },
+}));
+
+// Mock @react-navigation/native useTheme to provide default theme
+jest.mock('@react-navigation/native', () => {
+  const actual = jest.requireActual('@react-navigation/native');
+  return {
+    ...actual,
+    useTheme: () => ({
+      dark: false,
+      colors: {
+        primary: '#007AFF',
+        background: '#FFFFFF',
+        card: '#FFFFFF',
+        text: '#000000',
+        border: '#CCCCCC',
+        notification: '#FF3B30',
+      },
+    }),
+    useFocusEffect: (cb: any) => {
+      const React = require('react');
+      React.useEffect(() => {
+        if (typeof cb === 'function') cb();
+      }, []);
+    },
+    useNavigation: () => ({
+      navigate: jest.fn(),
+      goBack: jest.fn(),
+      setOptions: jest.fn(),
+    }),
+    useRoute: () => ({
+      params: {},
+    }),
+  };
+});
+
+// Mock expo-notifications
+jest.mock('expo-notifications', () => ({
+  getPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  requestPermissionsAsync: jest.fn().mockResolvedValue({ status: 'granted' }),
+  getExpoPushTokenAsync: jest.fn().mockResolvedValue({ data: 'test-token' }),
+  setNotificationHandler: jest.fn(),
+  addNotificationReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  addNotificationResponseReceivedListener: jest.fn(() => ({ remove: jest.fn() })),
+  AndroidImportance: { MAX: 5 },
+}));

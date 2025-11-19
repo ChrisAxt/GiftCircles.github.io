@@ -77,6 +77,9 @@ const sv = {
         cancel: 'Kanske senare',
         confirm: 'Stötta oss',
       },
+      manageSubscription: {
+        button: '⭐ Hantera prenumeration',
+      },
       dangerTitle: 'Riskzon',
       dangerDesc: 'Detta raderar din profil permanent och tar bort dig från evenemang.',
       delete: 'Radera konto',
@@ -104,8 +107,12 @@ const sv = {
         push: 'Pushnotiser',
         purchaseReminders: 'Köppåminnelser',
         purchaseRemindersDesc: 'Få notiser för att köpa reserverade saker innan evenemang',
+        instantNotifications: 'Direktnotiser',
+        instantNotificationsDesc: 'Få notiser omedelbart när listor, saker eller bokningar skapas',
+        instantNotificationsUpdated: 'Direktnotiser uppdaterade',
         activityDigest: 'Aktivitetssammanfattning',
         activityDigestDesc: 'Få en sammanfattning av aktivitet i dina evenemang',
+        digestTimezoneNote: 'Times are in your local timezone',
         digestFrequency: 'Frekvens',
         digestDay: 'Dag',
         digestTime: 'Leveranstid',
@@ -611,6 +618,35 @@ const sv = {
       alertInvalidTitle: 'Ogiltig kod',
       alertInvalidBody: 'Den koden hittades inte.',
       alertFailedTitle: 'Misslyckades att gå med',
+    },
+
+    premium: {
+      upgradeRequired: {
+        title: 'Uppgradering krävs',
+        featureMessage: 'Denna funktion kräver en premium-prenumeration. Uppgradera för att låsa upp köppåminnelser, aktivitetssammanfattningar, slumpmässig tilldelning och mer!',
+        eventLimitMessage: 'Du kan skapa upp till 3 evenemang i gratisplanen. Uppgradera för att skapa obegränsade evenemang!',
+        joinLimitMessage: 'Du kan vara medlem i upp till 3 evenemang i gratisplanen. Uppgradera för att gå med i obegränsade evenemang eller lämna ett befintligt evenemang först!',
+        eventAccessMessage: 'Du kan komma åt upp till 3 evenemang i gratisplanen. Detta evenemang är låst. Uppgradera för att komma åt alla dina evenemang!',
+        genericMessage: 'Detta kräver en premium-prenumeration. Uppgradera för att låsa upp alla funktioner!',
+        cancel: 'Avbryt',
+        upgrade: 'Uppgradera',
+      },
+      purchaseSuccess: {
+        title: 'Välkommen till Premium!',
+        message: 'Alla premiumfunktioner upplåsta!',
+      },
+      purchaseError: {
+        title: 'Köp misslyckades',
+        message: 'Något gick fel. Försök igen.',
+      },
+      paywallError: {
+        title: 'Kan inte ladda',
+        message: 'Kunde inte ladda prenumerationsalternativ.',
+      },
+      restoreSuccess: {
+        title: 'Köp återställda',
+        message: 'Din prenumeration har återställts!',
+      },
     },
 
     support: {

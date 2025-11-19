@@ -7,6 +7,7 @@ import { useTranslation } from 'react-i18next';
 import { ScreenScroll } from '../components/Screen';
 import { useTheme } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 
 export default function JoinEventScreen({ navigation }: any) {
   const { t } = useTranslation();
@@ -36,10 +37,8 @@ export default function JoinEventScreen({ navigation }: any) {
       }
 
       if (canJoin === false) {
-        return Alert.alert(
-          t('errors.limits.freeLimitTitle', 'Upgrade required'),
-          t('errors.limits.freeLimitMessage', 'You can create up to 3 events on the free plan. Upgrade to create more.')
-        );
+        showUpgradePrompt({ reason: 'joinLimit', t });
+        return;
       }
 
       const { data: eventId, error } = await supabase.rpc('join_event', { p_code: trimmed });

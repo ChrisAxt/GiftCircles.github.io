@@ -12,6 +12,7 @@ import { useTranslation } from 'react-i18next';
 import { PendingInvitesCard } from '../components/PendingInvitesCard';
 import { PendingSplitRequestsCard } from '../components/PendingSplitRequestsCard';
 import { Screen } from '../components/Screen';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 type MemberRow = { event_id: string; user_id: string };
 
 // Shape returned by public.events_for_current_user()
@@ -256,10 +257,7 @@ export default function EventListScreen({ navigation }: any) {
       // TODO: Move body to translations + translate
       // Block if user has reached free tier limit
       if (canJoin === false) {
-        Alert.alert(
-          t('errors.limits.freeLimitTitle', 'Upgrade required'),
-          t('errors.limits.joinLimitMessage', 'You can only be a member of 3 events on the free plan. Upgrade to join more events or leave an existing event first.')
-        );
+        showUpgradePrompt({ reason: 'joinLimit', t });
         return;
       }
 
@@ -299,11 +297,7 @@ export default function EventListScreen({ navigation }: any) {
 
       // Block if user has reached free tier limit
       if (canCreate === false) {
-        // TODO: Move body to translations + translate
-        Alert.alert(
-          t('errors.limits.freeLimitTitle', 'Upgrade required'),
-          t('errors.limits.freeLimitMessage', 'You can create up to 3 events on the free plan. Upgrade to create more.')
-        );
+        showUpgradePrompt({ reason: 'eventLimit', t });
         return;
       }
 
@@ -386,11 +380,7 @@ export default function EventListScreen({ navigation }: any) {
 
             const onPress = () => {
               if (!isAccessible) {
-                // TODO: Move body to translations + translate
-                Alert.alert(
-                  t('errors.limits.freeLimitTitle', 'Upgrade required'),
-                  t('errors.limits.eventAccessMessage', 'You can access up to 3 events on the free plan. This event is locked. Upgrade to access all your events.')
-                );
+                showUpgradePrompt({ reason: 'eventAccess', t });
                 return;
               }
               navigation.navigate('EventDetail', { id: item.id });

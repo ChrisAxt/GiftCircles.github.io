@@ -8,9 +8,12 @@ import { Session } from '@supabase/supabase-js';
 import { useTranslation } from 'react-i18next';
 import { supabase } from '../lib/supabase';
 import Constants from 'expo-constants';
+import * as Localization from 'expo-localization';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { configureNotificationHandler, setupNotificationResponseListener } from '../lib/notifications';
 import Toast, { BaseToast, ErrorToast } from 'react-native-toast-message';
+import { initializeRevenueCat, logoutRevenueCat } from '../lib/iap';
+import { navigationRef } from '../lib/navigationRef';
 
 // import { StatusBar } from 'expo-status-bar';
 
@@ -35,6 +38,8 @@ import AllListsScreen from '../screens/AllListsScreen';
 import MyClaimsScreen from '../screens/MyClaimsScreen';
 import EditItemScreen from '../screens/EditItemScreen';
 import FancyTabBar from '../components/FancyTabBar';
+import PaywallScreen from '../screens/PaywallScreen';
+import CustomerCenterScreen from '../screens/CustomerCenterScreen';
 
 const Stack = createNativeStackNavigator();
 const Tab = createMaterialTopTabNavigator();
@@ -182,6 +187,8 @@ function InnerNavigator() {
       if (!session) {
         setNeedsOnboarding(false);
         setNeedsSupport(false);
+        // Logout from RevenueCat when user logs out
+        await logoutRevenueCat();
         return;
       }
       setCheckingProfile(true);
@@ -193,17 +200,44 @@ function InnerNavigator() {
           return;
         }
 
+        // Initialize RevenueCat with user ID
+        await initializeRevenueCat(user.id);
+
+        // Auto-update timezone (silently in background)
+        try {
+          const currentTimezone = Localization.getCalendars()[0]?.timeZone
+            || Localization.timezone
+            || 'UTC';
+
+          // Check current timezone in database
+          const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('timezone')
+            .eq('id', user.id)
+            .single();
+
+          // Only update if timezone has changed (to avoid unnecessary writes)
+          if (currentProfile?.timezone !== currentTimezone) {
+            await supabase
+              .from('profiles')
+              .update({ timezone: currentTimezone })
+              .eq('id', user.id);
+          }
+        } catch (e) {
+          // Silently fail - timezone update is not critical
+        }
+
         const { data: prof } = await supabase
           .from('profiles')
-          .select('onboarding_done, last_support_screen_shown, plan, pro_until')
+          .select('onboarding_done, last_support_screen_shown, plan, pro_until, manual_pro')
           .eq('id', user.id)
           .maybeSingle();
 
         const onboardingDone = !!prof?.onboarding_done;
         if (!cancelled) setNeedsOnboarding(!onboardingDone);
 
-        // Check if user is pro: plan is 'pro' OR pro_until is in the future
-        const isPro = prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
+        // Check if user is pro: manual_pro OR plan is 'pro' OR pro_until is in the future
+        const isPro = prof?.manual_pro === true || prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
         const lastShown = prof?.last_support_screen_shown;
         let shouldShowSupport = false;
 
@@ -269,11 +303,16 @@ function InnerNavigator() {
             <Stack.Screen name="CreateList" component={CreateListScreen} options={{ title: 'Create List', headerShown: false }} />
             <Stack.Screen name="EditList" component={EditListScreen} options={{ title: 'Edit List', headerShown: false }} />
             <Stack.Screen name="EditItem" component={EditItemScreen} options={{ title: 'Edit Item', headerShown: false }} />
+            <Stack.Screen name="Paywall" component={PaywallScreen} options={{ headerShown: false, presentation: 'modal' }} />
+            <Stack.Screen name="CustomerCenter" component={CustomerCenterScreen} options={{ headerShown: false, presentation: 'modal' }} />
           </>
         )}
       </Stack.Navigator>
     </NavigationContainer>
-    <Toast config={toastConfig} />
+    <Toast
+      config={toastConfig}
+      bottomOffset={isAndroid ? 80 : 40}
+    />
   </>
   );
 }

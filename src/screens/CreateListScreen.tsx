@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, TextInput, Alert, Text, Switch, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 import { parseSupabaseError } from '../lib/errorHandler';
 import { LabeledInput } from '../components/LabeledInput';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -40,9 +41,19 @@ export default function CreateListScreen({ route, navigation }: any) {
   const [randomAssignment, setRandomAssignment] = useState(false);
   const [randomAssignmentMode, setRandomAssignmentMode] = useState<'one_per_member' | 'distribute_all'>('one_per_member');
   const [randomReceiverAssignment, setRandomReceiverAssignment] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   const toggleRecipient = (uid: string) => setRecipientIds(prev => ({ ...prev, [uid]: !prev[uid] }));
   const toggleViewer = (uid: string) => setViewerIds(prev => ({ ...prev, [uid]: !prev[uid] }));
+
+  const handleRandomAssignmentToggle = () => {
+    if (!isPro && !randomAssignment) {
+      // Show upgrade prompt when trying to enable (not when disabling)
+      showUpgradePrompt({ reason: 'feature', t });
+      return;
+    }
+    setRandomAssignment(!randomAssignment);
+  };
 
   // Load event members + profile names
   useEffect(() => {
@@ -54,6 +65,17 @@ export default function CreateListScreen({ route, navigation }: any) {
         const { data: { user } } = await supabase.auth.getUser();
         if (user && !cancelled) {
           setCurrentUserId(user.id);
+
+          // Check pro status
+          const { data: prof } = await supabase
+            .from('profiles')
+            .select('plan, pro_until, manual_pro')
+            .eq('id', user.id)
+            .maybeSingle();
+
+          // Check if user is pro: manual_pro OR plan is 'pro' OR pro_until is in the future
+          const userIsPro = prof?.manual_pro === true || prof?.plan === 'pro' || (prof?.pro_until && new Date(prof.pro_until) > new Date());
+          setIsPro(!!userIsPro);
         }
 
         const { data: ms, error: mErr } = await supabase
@@ -176,6 +198,9 @@ export default function CreateListScreen({ route, navigation }: any) {
       });
 
       if (rpcErr) {
+        console.error('[CreateList] RPC error:', rpcErr);
+        console.error('[CreateList] Error message:', rpcErr.message);
+        console.error('[CreateList] Error code:', rpcErr.code);
         const errorDetails = parseSupabaseError(rpcErr, t);
         toast.error(errorDetails.title, { text2: errorDetails.message });
         setSubmitting(false); // Important: reset state before returning
@@ -194,7 +219,10 @@ export default function CreateListScreen({ route, navigation }: any) {
       if (excludedUserIds.length) {
         const rows = excludedUserIds.map(uid => ({ list_id: newListId, user_id: uid }));
         const { error: exclErr } = await supabase.from('list_exclusions').insert(rows);
-        if (exclErr) throw exclErr;
+        if (exclErr) {
+          console.error('[CreateList] Exclusions error:', exclErr);
+          throw exclErr;
+        }
       }
 
       // Add email recipients (auto-invites to event)
@@ -205,6 +233,7 @@ export default function CreateListScreen({ route, navigation }: any) {
             p_recipient_email: email,
           });
           if (emailErr) {
+            console.error('[CreateList] Email invite error:', emailErr);
             toast.error(t('createList.toasts.inviteFailedTitle', { email }), { text2: emailErr.message });
           }
         }
@@ -214,6 +243,9 @@ export default function CreateListScreen({ route, navigation }: any) {
       { text2: t('createList.toasts.created.body')});
       navigation.goBack();
     } catch (err: any) {
+      console.error('[CreateList] Catch block error:', err);
+      console.error('[CreateList] Error message:', err.message);
+      console.error('[CreateList] Error code:', err.code);
       const errorDetails = parseSupabaseError(err, t);
       toast.error(errorDetails.title, { text2: errorDetails.message });
     } finally {
@@ -574,7 +606,7 @@ export default function CreateListScreen({ route, navigation }: any) {
               }}
             >
               <Pressable
-                onPress={() => setRandomAssignment(!randomAssignment)}
+                onPress={handleRandomAssignmentToggle}
                 style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' }}
               >
                 <View style={{ flex: 1, marginRight: 12 }}>

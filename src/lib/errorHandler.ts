@@ -131,6 +131,31 @@ export function parseSupabaseError(error: any, t: TFunction): ErrorDetails {
     };
   }
 
+  // List creation errors
+  if (errorMessage.includes('list_name_required')) {
+    return {
+      title: t('errors.validation.listNameRequiredTitle', 'List name required'),
+      message: t('errors.validation.listNameRequiredMessage', 'Please enter a name for your list'),
+      severity: 'warning'
+    };
+  }
+
+  if (errorMessage.includes('list_name_too_long')) {
+    return {
+      title: t('errors.validation.listNameTooLongTitle', 'List name too long'),
+      message: t('errors.validation.listNameTooLongMessage', 'List name must be 255 characters or less'),
+      severity: 'warning'
+    };
+  }
+
+  if (errorMessage.includes('invalid_random_assignment_mode')) {
+    return {
+      title: t('errors.validation.invalidRandomAssignmentTitle', 'Invalid assignment mode'),
+      message: t('errors.validation.invalidRandomAssignmentMessage', 'Please select a valid random assignment mode'),
+      severity: 'warning'
+    };
+  }
+
   // Item/claim errors
   if (errorMessage.includes('has_claims')) {
     return {

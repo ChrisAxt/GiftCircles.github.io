@@ -78,6 +78,9 @@ const it = {
         cancel: 'Forse più tardi',
         confirm: 'Sostienici',
       },
+      manageSubscription: {
+        button: '⭐ Gestisci abbonamento',
+      },
       dangerTitle: 'Zona pericolosa',
       dangerDesc: 'Questo eliminerà definitivamente il tuo profilo e ti rimuoverà dagli eventi.',
       delete: 'Elimina account',
@@ -105,8 +108,12 @@ const it = {
         push: 'Notifiche push',
         purchaseReminders: 'Promemoria acquisti',
         purchaseRemindersDesc: 'Ricevi notifiche per acquistare articoli riservati prima degli eventi',
+        instantNotifications: 'Notifiche Istantanee',
+        instantNotificationsDesc: 'Ricevi notifiche immediatamente quando vengono create liste, articoli o prenotazioni',
+        instantNotificationsUpdated: 'Notifiche istantanee aggiornate',
         activityDigest: 'Riepilogo Attività',
         activityDigestDesc: 'Ricevi un riepilogo dell\'attività nei tuoi eventi',
+        digestTimezoneNote: 'Times are in your local timezone',
         digestFrequency: 'Frequenza',
         digestDay: 'Giorno',
         digestTime: 'Orario di Consegna',
@@ -628,6 +635,35 @@ const it = {
       alertInvalidTitle: 'Codice non valido',
       alertInvalidBody: 'Quel codice non è stato trovato.',
       alertFailedTitle: 'Impossibile unirsi',
+    },
+
+    premium: {
+      upgradeRequired: {
+        title: 'Aggiornamento richiesto',
+        featureMessage: 'Questa funzionalità richiede un abbonamento premium. Aggiorna per sbloccare promemoria acquisti, riepiloghi attività, assegnazione casuale e altro ancora!',
+        eventLimitMessage: 'Puoi creare fino a 3 eventi nel piano gratuito. Aggiorna per creare eventi illimitati!',
+        joinLimitMessage: 'Puoi essere membro di fino a 3 eventi nel piano gratuito. Aggiorna per unirti a eventi illimitati o lascia prima un evento esistente!',
+        eventAccessMessage: 'Puoi accedere fino a 3 eventi nel piano gratuito. Questo evento è bloccato. Aggiorna per accedere a tutti i tuoi eventi!',
+        genericMessage: 'Questo richiede un abbonamento premium. Aggiorna per sbloccare tutte le funzionalità!',
+        cancel: 'Annulla',
+        upgrade: 'Aggiorna',
+      },
+      purchaseSuccess: {
+        title: 'Benvenuto in Premium!',
+        message: 'Tutte le funzionalità premium sbloccate!',
+      },
+      purchaseError: {
+        title: 'Acquisto fallito',
+        message: 'Qualcosa è andato storto. Riprova.',
+      },
+      paywallError: {
+        title: 'Impossibile caricare',
+        message: 'Impossibile caricare le opzioni di abbonamento.',
+      },
+      restoreSuccess: {
+        title: 'Acquisti ripristinati',
+        message: 'Il tuo abbonamento è stato ripristinato!',
+      },
     },
 
     support: {

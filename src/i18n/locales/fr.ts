@@ -79,6 +79,9 @@ const fr = {
         cancel: 'Peut-être plus tard',
         confirm: 'Soutenez-nous',
       },
+      manageSubscription: {
+        button: '⭐ Gérer l\'abonnement',
+      },
       dangerTitle: 'Zone dangereuse',
       dangerDesc: 'Cela supprimera définitivement votre profil et vous retirera des événements.',
       delete: 'Supprimer le compte',
@@ -106,8 +109,12 @@ const fr = {
         push: 'Notifications push',
         purchaseReminders: 'Rappels d\'achat',
         purchaseRemindersDesc: 'Recevez des notifications pour acheter les articles réservés avant les événements',
+        instantNotifications: 'Notifications Instantanées',
+        instantNotificationsDesc: 'Recevez des notifications immédiatement lorsque des listes, articles ou réservations sont créés',
+        instantNotificationsUpdated: 'Notifications instantanées mises à jour',
         activityDigest: 'Résumé d\'Activité',
         activityDigestDesc: 'Recevez un résumé de l\'activité dans vos événements',
+        digestTimezoneNote: 'Times are in your local timezone',
         digestFrequency: 'Fréquence',
         digestDay: 'Jour',
         digestTime: 'Heure de Livraison',
@@ -629,6 +636,35 @@ const fr = {
       alertInvalidTitle: 'Code invalide',
       alertInvalidBody: 'Ce code est introuvable.',
       alertFailedTitle: 'Échec de la jonction',
+    },
+
+    premium: {
+      upgradeRequired: {
+        title: 'Mise à niveau requise',
+        featureMessage: 'Cette fonctionnalité nécessite un abonnement premium. Passez à la version premium pour débloquer les rappels d\'achat, les résumés d\'activité, l\'attribution aléatoire et plus encore !',
+        eventLimitMessage: 'Vous pouvez créer jusqu\'à 3 événements avec le plan gratuit. Passez à Premium pour créer des événements illimités !',
+        joinLimitMessage: 'Vous pouvez être membre de jusqu\'à 3 événements avec le plan gratuit. Passez à Premium pour rejoindre des événements illimités ou quittez d\'abord un événement existant !',
+        eventAccessMessage: 'Vous pouvez accéder à jusqu\'à 3 événements avec le plan gratuit. Cet événement est verrouillé. Passez à Premium pour accéder à tous vos événements !',
+        genericMessage: 'Cela nécessite un abonnement premium. Passez à Premium pour débloquer toutes les fonctionnalités !',
+        cancel: 'Annuler',
+        upgrade: 'Passer à Premium',
+      },
+      purchaseSuccess: {
+        title: 'Bienvenue dans Premium !',
+        message: 'Toutes les fonctionnalités premium débloquées !',
+      },
+      purchaseError: {
+        title: 'Achat échoué',
+        message: 'Quelque chose s\'est mal passé. Veuillez réessayer.',
+      },
+      paywallError: {
+        title: 'Impossible de charger',
+        message: 'Impossible de charger les options d\'abonnement.',
+      },
+      restoreSuccess: {
+        title: 'Achats restaurés',
+        message: 'Votre abonnement a été restauré !',
+      },
     },
 
     support: {
