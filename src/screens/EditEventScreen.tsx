@@ -21,6 +21,7 @@ import { Screen } from '../components/Screen';
 import { useTheme } from '@react-navigation/native';
 import TopBar from '../components/TopBar';
 import { useSettings } from '../theme/SettingsProvider';
+import { showUpgradePrompt } from '../lib/upgradePrompt';
 
 type EventRow = {
   id: string;
@@ -72,6 +73,7 @@ export default function EditEventScreen({ route, navigation }: any) {
 
   const [isAdmin, setIsAdmin] = useState(false);
   const [showPicker, setShowPicker] = useState(false);
+  const [isPro, setIsPro] = useState(false);
 
   useLayoutEffect(() => {
     navigation.setOptions({ title: t('editEvent.title') });
@@ -129,6 +131,19 @@ export default function EditEventScreen({ route, navigation }: any) {
   }, [id, t]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Check Pro status on mount
+  useEffect(() => {
+    const checkProStatus = async () => {
+      try {
+        const { data } = await supabase.rpc('is_pro');
+        setIsPro(data === true);
+      } catch {
+        setIsPro(false);
+      }
+    };
+    checkProStatus();
+  }, []);
 
   const save = useCallback(async () => {
     if (!isAdmin) {
@@ -304,26 +319,54 @@ export default function EditEventScreen({ route, navigation }: any) {
             {t('editEvent.labels.recurrence', 'Recurs')}
           </Text>
           <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-            {(['none', 'weekly', 'monthly', 'yearly'] as const).map(opt => (
-              <Pressable
-                key={opt}
-                onPress={() => isAdmin && setRecurrence(opt)}
-                disabled={!isAdmin}
-                style={{
-                  paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  borderRadius: 999,
-                  backgroundColor: recurrence === opt ? '#2e95f1' : colors.card,
-                  borderWidth: recurrence === opt ? 0 : 1,
-                  borderColor: recurrence === opt ? 'transparent' : colors.border,
-                  opacity: !isAdmin ? 0.6 : 1,
-                }}
-              >
-                <Text style={{ color: recurrence === opt ? 'white' : colors.text, fontWeight: '700' }}>
-                  {t(`editEvent.recurs.${opt}`, opt.charAt(0).toUpperCase() + opt.slice(1))}
-                </Text>
-              </Pressable>
-            ))}
+            {(['none', 'weekly', 'monthly', 'yearly'] as const).map(opt => {
+              const isLocked = opt !== 'none' && !isPro;
+              const handlePress = () => {
+                if (!isAdmin) return;
+                if (isLocked) {
+                  showUpgradePrompt({ reason: 'feature', t });
+                  return;
+                }
+                setRecurrence(opt);
+              };
+
+              return (
+                <Pressable
+                  key={opt}
+                  onPress={handlePress}
+                  disabled={!isAdmin}
+                  style={{
+                    paddingVertical: 8,
+                    paddingHorizontal: 12,
+                    borderRadius: 999,
+                    backgroundColor: recurrence === opt ? '#2e95f1' : colors.card,
+                    borderWidth: recurrence === opt ? 0 : 1,
+                    borderColor: recurrence === opt ? 'transparent' : colors.border,
+                    opacity: !isAdmin ? 0.6 : isLocked ? 0.5 : 1,
+                  }}
+                >
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <Text style={{ color: recurrence === opt ? 'white' : colors.text, fontWeight: '700' }}>
+                      {t(`editEvent.recurs.${opt}`, opt.charAt(0).toUpperCase() + opt.slice(1))}
+                    </Text>
+                    {opt !== 'none' && (
+                      <View
+                        style={{
+                          backgroundColor: '#2e95f1',
+                          paddingHorizontal: 6,
+                          paddingVertical: 2,
+                          borderRadius: 999,
+                        }}
+                      >
+                        <Text style={{ color: 'white', fontSize: 10, fontWeight: '800' }}>
+                          PRO
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                </Pressable>
+              );
+            })}
           </View>
         </View>
 

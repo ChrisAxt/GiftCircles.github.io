@@ -65,19 +65,19 @@ export default function SupportScreen({ navigation, route }: SupportScreenProps)
   };
 
   const handleGetPremium = async () => {
-    setLoading(true);
-    // TODO: Implement premium subscription flow (Apple/Google IAP)
-    // For now, just show a toast
-    toast.info(t('support.comingSoon.title'), { text2: t('support.comingSoon.body') });
     await updateSupportScreenShown();
-    setLoading(false);
 
-    // Navigate to next screen
-    if (needsOnboarding) {
-      navigation.replace('Onboarding');
-    } else {
-      navigation.replace('Home');
-    }
+    // Navigate to paywall screen
+    navigation.navigate('Paywall', {
+      onSuccess: () => {
+        // After successful purchase, navigate to the next screen
+        if (needsOnboarding) {
+          navigation.replace('Onboarding');
+        } else {
+          navigation.replace('Home');
+        }
+      }
+    });
   };
 
   const handleMaybeLater = async () => {
@@ -144,7 +144,7 @@ export default function SupportScreen({ navigation, route }: SupportScreenProps)
               top: -1,
               left: 0,
               right: 0,
-              height: 274,
+              height: 370,
               borderTopLeftRadius: 20,
               borderTopRightRadius: 20,
               borderBottomLeftRadius: 20,
@@ -158,9 +158,11 @@ export default function SupportScreen({ navigation, route }: SupportScreenProps)
 
           {[
             { key: 'unlimitedEvents', icon: '∞' },
-            { key: 'purchaseReminders', icon: '🔔' },
-            { key: 'digest', icon: '📊' },
+            { key: 'recurringEvents', icon: '🔄' },
             { key: 'randomAssignment', icon: '🎲' },
+            { key: 'digest', icon: '📊' },
+            { key: 'purchaseReminders', icon: '🔔' },
+            { key: 'adFree', icon: '✨' },
           ].map((feature) => (
             <View
               key={feature.key}

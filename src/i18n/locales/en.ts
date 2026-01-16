@@ -65,12 +65,8 @@ const en = {
       stats: { events: 'Events', listsCreated: 'Lists created' },
       account: 'Account',
       signOut: 'Sign out',
-      supportUs: {
-        button: '☕ Support Us',
-        title: 'Support Us',
-        message: 'This is a one-time donation and won\'t grant premium access due to app store rules. Thank you for your support!',
-        cancel: 'Maybe later',
-        confirm: 'Support us',
+      upgradeToPro: {
+        button: 'Upgrade to Premium',
       },
       manageSubscription: {
         button: '⭐ Manage Subscription',
@@ -286,6 +282,23 @@ const en = {
         leaveFailed: 'Leave failed',
         leftEvent: 'Left event',
       },
+      rollover: {
+        bannerTitle: 'Event Rollover Required',
+        bannerMessage: 'This recurring event has passed. Roll it over to schedule the next occurrence.',
+        rolloverNow: 'Rollover Event',
+      },
+    },
+    rollover: {
+      title: 'Rollover Event',
+      currentDate: 'Current Event Date',
+      nextDate: 'Next Occurrence',
+      warning: 'Claimed items will be permanently deleted. Unclaimed items will remain for the next occurrence.',
+      cancel: 'Cancel',
+      confirm: 'Rollover Event',
+      rolling: 'Rolling over…',
+      success: 'Event rolled over successfully',
+      error: 'Failed to rollover event',
+      errorBody: 'Please try again',
     },
     editEvent: {
       title: 'Edit Event',
@@ -705,19 +718,15 @@ const en = {
       premiumFeatures: {
         title: 'Premium Features',
         unlimitedEvents: 'Unlimited events',
+        recurringEvents: 'Recurring events',
+        randomAssignment: 'Random assignment lists (Secret Santa)',
+        digest: 'Daily/weekly digests',
         purchaseReminders: 'Purchase reminders',
-        digest: 'Daily/weekly digest',
-        randomAssignment: 'Random assignment lists',
+        adFree: 'Help us keep apps ad-free',
       },
       actions: {
-        getPremium: 'Get Premium',
-        buyMeCoffee: 'Buy Me a Coffee ☕',
+        getPremium: 'Upgrade to Premium',
         maybeLater: 'Maybe later',
-      },
-      buyMeCoffeeNote: 'Note: This is a one-time donation and won\'t grant premium access due to app store rules.',
-      comingSoon: {
-        title: 'Coming Soon',
-        body: 'Premium subscriptions will be available soon!',
       },
       errors: {
         cantOpenUrl: 'Cannot open URL',

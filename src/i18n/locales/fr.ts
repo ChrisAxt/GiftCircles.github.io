@@ -72,13 +72,6 @@ const fr = {
       stats: { events: 'Événements', listsCreated: 'Listes créées' },
       account: 'Compte',
       signOut: 'Se déconnecter',
-      supportUs: {
-        button: '☕ Soutenez-nous',
-        title: 'Soutenez-nous',
-        message: 'Il s\'agit d\'un don unique qui n\'accordera pas d\'accès premium en raison des règles de l\'App Store. Merci de votre soutien !',
-        cancel: 'Peut-être plus tard',
-        confirm: 'Soutenez-nous',
-      },
       manageSubscription: {
         button: '⭐ Gérer l\'abonnement',
       },

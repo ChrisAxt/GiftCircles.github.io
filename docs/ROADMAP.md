@@ -24,15 +24,18 @@
 - Date: TBD
 
 ### New Features
-- Feature 1: Move Lists and items into other events 
-- Feature 2: Description
+- Feature 1: Move Lists and items into other events
+- Feature 2: Event Rollover History Viewer - View past occurrences of recurring events with claimed items history, including ability to view details and delete individual or all past occurrences
+- Feature 3: Make the whole events page scrollable (not just the lists)
+- Feature 4: Prioritize items (I want this more than that)
+- Feature 5: Make it so users can see who is excluded from seeing a list
 
 ### Improvements
 - Improvement 1: Description
 - Improvement 2: Description
 
 ### Bug Fixes
-- Fix 1: Description
+- Fix 1: When clicking a notification -> Go to sceeen/event/item of interest
 - Fix 2: Description
 
 ### Technical Debt

@@ -71,13 +71,6 @@ const it = {
       stats: { events: 'Eventi', listsCreated: 'Liste create' },
       account: 'Account',
       signOut: 'Esci',
-      supportUs: {
-        button: '☕ Sostienici',
-        title: 'Sostienici',
-        message: 'Questa è una donazione una tantum e non garantirà l\'accesso premium a causa delle regole dell\'app store. Grazie per il tuo supporto!',
-        cancel: 'Forse più tardi',
-        confirm: 'Sostienici',
-      },
       manageSubscription: {
         button: '⭐ Gestisci abbonamento',
       },

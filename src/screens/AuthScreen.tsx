@@ -1,9 +1,10 @@
 // src/screens/AuthScreen.tsx
 import React, { useState } from 'react';
-import { View, Text, TextInput, Button, Alert, Pressable, KeyboardAvoidingView, Platform, ScrollView } from 'react-native';
+import { View, Text, TextInput, Alert, Pressable, KeyboardAvoidingView, Platform, ScrollView, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useTheme } from '@react-navigation/native';
 import { useTranslation } from 'react-i18next';
+import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../lib/supabase';
 
 export default function AuthScreen() {
@@ -16,6 +17,8 @@ export default function AuthScreen() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   const signIn = async () => {
     setLoading(true);
@@ -206,61 +209,129 @@ export default function AuthScreen() {
       )}
 
       {(mode === 'signin' || mode === 'signup') && (
-        <TextInput
-          placeholder={t('auth.passwordLabel')}
-          placeholderTextColor={colors.text + '80'}
-          secureTextEntry
-          value={password}
-          onChangeText={setPassword}
-          style={{
-            borderWidth: 1,
-            borderColor: colors.border,
-            padding: 10,
-            borderRadius: 8,
-            color: colors.text,
-            backgroundColor: colors.card
-          }}
-        />
-      )}
-
-      {mode === 'verify' && (
-        <>
+        <View style={{ position: 'relative' }}>
           <TextInput
-            placeholder={t('auth.newPassword')}
+            placeholder={t('auth.passwordLabel')}
             placeholderTextColor={colors.text + '80'}
-            secureTextEntry
+            secureTextEntry={!showPassword}
             value={password}
             onChangeText={setPassword}
             style={{
               borderWidth: 1,
               borderColor: colors.border,
               padding: 10,
+              paddingRight: mode === 'signup' ? 45 : 10,
               borderRadius: 8,
               color: colors.text,
               backgroundColor: colors.card
             }}
           />
-          <TextInput
-            placeholder={t('auth.confirmPassword')}
-            placeholderTextColor={colors.text + '80'}
-            secureTextEntry
-            value={confirmPassword}
-            onChangeText={setConfirmPassword}
-            style={{
-              borderWidth: 1,
-              borderColor: colors.border,
-              padding: 10,
-              borderRadius: 8,
-              color: colors.text,
-              backgroundColor: colors.card
-            }}
-          />
+          {mode === 'signup' && (
+            <Pressable
+              onPress={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: 0,
+                bottom: 0,
+                justifyContent: 'center',
+                padding: 5
+              }}
+            >
+              <Ionicons name={showPassword ? 'eye' : 'eye-off'} size={22} color={colors.text} />
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {mode === 'verify' && (
+        <>
+          <View style={{ position: 'relative' }}>
+            <TextInput
+              placeholder={t('auth.newPassword')}
+              placeholderTextColor={colors.text + '80'}
+              secureTextEntry={!showPassword}
+              value={password}
+              onChangeText={setPassword}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 10,
+                paddingRight: 45,
+                borderRadius: 8,
+                color: colors.text,
+                backgroundColor: colors.card
+              }}
+            />
+            <Pressable
+              onPress={() => setShowPassword(!showPassword)}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: 0,
+                bottom: 0,
+                justifyContent: 'center',
+                padding: 5
+              }}
+            >
+              <Ionicons name={showPassword ? 'eye' : 'eye-off'} size={22} color={colors.text} />
+            </Pressable>
+          </View>
+          <View style={{ position: 'relative' }}>
+            <TextInput
+              placeholder={t('auth.confirmPassword')}
+              placeholderTextColor={colors.text + '80'}
+              secureTextEntry={!showConfirmPassword}
+              value={confirmPassword}
+              onChangeText={setConfirmPassword}
+              style={{
+                borderWidth: 1,
+                borderColor: colors.border,
+                padding: 10,
+                paddingRight: 45,
+                borderRadius: 8,
+                color: colors.text,
+                backgroundColor: colors.card
+              }}
+            />
+            <Pressable
+              onPress={() => setShowConfirmPassword(!showConfirmPassword)}
+              style={{
+                position: 'absolute',
+                right: 10,
+                top: 0,
+                bottom: 0,
+                justifyContent: 'center',
+                padding: 5
+              }}
+            >
+              <Text style={{ fontSize: 20 }}>{showConfirmPassword ? '👁️' : '👁️‍🗨️'}</Text>
+            </Pressable>
+          </View>
         </>
       )}
 
       {mode === 'signin' ? (
         <>
-          <Button title={loading ? t('auth.loading') : t('auth.signIn')} onPress={signIn} disabled={loading} />
+          <Pressable
+            onPress={signIn}
+            disabled={loading}
+            style={{
+              backgroundColor: '#2e95f1',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              opacity: loading ? 0.7 : 1,
+              marginTop: 8
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('auth.signIn')}</Text>
+            )}
+          </Pressable>
           <Pressable onPress={() => setMode('signup')} style={{ padding: 8, alignItems: 'center' }}>
             <Text style={{ color: colors.primary }}>{t('auth.createAnAccount')}</Text>
           </Pressable>
@@ -270,21 +341,75 @@ export default function AuthScreen() {
         </>
       ) : mode === 'signup' ? (
         <>
-          <Button title={loading ? t('auth.loading') : t('auth.createAccount')} onPress={signUp} disabled={loading} />
+          <Pressable
+            onPress={signUp}
+            disabled={loading}
+            style={{
+              backgroundColor: '#2e95f1',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              opacity: loading ? 0.7 : 1,
+              marginTop: 8
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('auth.createAccount')}</Text>
+            )}
+          </Pressable>
           <Pressable onPress={() => setMode('signin')} style={{ padding: 8, alignItems: 'center' }}>
             <Text style={{ color: colors.primary }}>{t('auth.haveAccount')}</Text>
           </Pressable>
         </>
       ) : mode === 'forgot' ? (
         <>
-          <Button title={loading ? t('auth.loading') : t('auth.sendResetCode')} onPress={sendResetCode} disabled={loading} />
+          <Pressable
+            onPress={sendResetCode}
+            disabled={loading}
+            style={{
+              backgroundColor: '#2e95f1',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              opacity: loading ? 0.7 : 1,
+              marginTop: 8
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('auth.sendResetCode')}</Text>
+            )}
+          </Pressable>
           <Pressable onPress={() => setMode('signin')} style={{ padding: 8, alignItems: 'center' }}>
             <Text style={{ color: colors.primary }}>{t('auth.backToSignIn')}</Text>
           </Pressable>
         </>
       ) : mode === 'verify' ? (
         <>
-          <Button title={loading ? t('auth.loading') : t('auth.verifyCode')} onPress={verifyCodeAndReset} disabled={loading} />
+          <Pressable
+            onPress={verifyCodeAndReset}
+            disabled={loading}
+            style={{
+              backgroundColor: '#2e95f1',
+              paddingVertical: 12,
+              paddingHorizontal: 16,
+              borderRadius: 10,
+              alignItems: 'center',
+              opacity: loading ? 0.7 : 1,
+              marginTop: 8
+            }}
+          >
+            {loading ? (
+              <ActivityIndicator color="#fff" />
+            ) : (
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 16 }}>{t('auth.verifyCode')}</Text>
+            )}
+          </Pressable>
           <Pressable onPress={() => setMode('signin')} style={{ padding: 8, alignItems: 'center' }}>
             <Text style={{ color: colors.primary }}>{t('auth.backToSignIn')}</Text>
           </Pressable>

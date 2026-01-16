@@ -16,6 +16,7 @@ import { Screen } from '../components/Screen';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import TopBar from '../components/TopBar';
 import { InviteUserModal } from '../components/InviteUserModal';
+import { RolloverModal } from '../components/RolloverModal';
 import { showUpgradePrompt } from '../lib/upgradePrompt';
 
 type MemberRow = { event_id: string; user_id: string; role: 'giver' | 'recipient' | 'admin' };
@@ -57,6 +58,10 @@ export default function EventDetailScreen({ route, navigation }: any) {
   const [inviteOpen, setInviteOpen] = useState(false);
   const openInvitePopup = () => setInviteOpen(true);
   const closeInvitePopup = () => setInviteOpen(false);
+
+  // Rollover modal state
+  const [rolloverModalOpen, setRolloverModalOpen] = useState(false);
+  const [showRolloverBanner, setShowRolloverBanner] = useState(false);
 
   const toggleMembers = () => {
     const opening = !membersOpen;
@@ -209,6 +214,17 @@ export default function EventDetailScreen({ route, navigation }: any) {
       .subscribe();
     return () => { supabase.removeChannel(ch); };
   }, [id]);
+
+  // Check if rollover banner should be shown
+  useEffect(() => {
+    if (event && myUserId) {
+      const amOwner = (event as any).owner_id === myUserId;
+      const needsRollover = (event as any).needs_rollover === true;
+      setShowRolloverBanner(amOwner && needsRollover && event.recurrence !== 'none');
+    } else {
+      setShowRolloverBanner(false);
+    }
+  }, [event, myUserId]);
 
   const memberCount = members.length;
   const totalItems = useMemo(
@@ -441,6 +457,44 @@ export default function EventDetailScreen({ route, navigation }: any) {
           return null;
         })()}
 
+        {/* Rollover Banner */}
+        {showRolloverBanner && event && (
+          <View
+            style={{
+              marginHorizontal: 16,
+              marginBottom: 12,
+              backgroundColor: '#FFF3CD',
+              borderRadius: 12,
+              padding: 12,
+              borderWidth: 1,
+              borderColor: '#FFC107',
+            }}
+          >
+            <View style={{ marginBottom: 8 }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#856404' }}>
+                {t('eventDetail.rollover.bannerTitle')}
+              </Text>
+            </View>
+            <Text style={{ fontSize: 14, color: '#856404', marginBottom: 12 }}>
+              {t('eventDetail.rollover.bannerMessage')}
+            </Text>
+            <Pressable
+              onPress={() => setRolloverModalOpen(true)}
+              style={{
+                backgroundColor: '#FFC107',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#000', fontWeight: '700', fontSize: 15 }}>
+                {t('eventDetail.rollover.rolloverNow')}
+              </Text>
+            </Pressable>
+          </View>
+        )}
+
         {/* Members (collapsible, fade only) */}
         <View style={{ paddingHorizontal: 16, paddingBottom: 8 }}>
           <Pressable
@@ -610,6 +664,19 @@ export default function EventDetailScreen({ route, navigation }: any) {
             load(); // Reload to show updated data
           }}
         />
+
+        {/* Rollover modal */}
+        {event && (
+          <RolloverModal
+            visible={rolloverModalOpen}
+            event={event}
+            onClose={() => setRolloverModalOpen(false)}
+            onRolloverComplete={() => {
+              setRolloverModalOpen(false);
+              load(); // Reload to show updated event data
+            }}
+          />
+        )}
       </View>
     </Screen>
   );

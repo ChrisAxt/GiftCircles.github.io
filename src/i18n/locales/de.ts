@@ -66,13 +66,6 @@ const de = {
       stats: { events: 'Events', listsCreated: 'Erstellte Listen' },
       account: 'Konto',
       signOut: 'Abmelden',
-      supportUs: {
-        button: '☕ Unterstütze uns',
-        title: 'Unterstütze uns',
-        message: 'Dies ist eine einmalige Spende und gewährt aufgrund von App Store-Regeln keinen Premium-Zugang. Vielen Dank für deine Unterstützung!',
-        cancel: 'Vielleicht später',
-        confirm: 'Unterstütze uns',
-      },
       manageSubscription: {
         button: '⭐ Abonnement verwalten',
       },

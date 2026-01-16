@@ -2,9 +2,12 @@
 import React, { useEffect, useState } from 'react';
 import { View, ActivityIndicator, StyleSheet } from 'react-native';
 import { useTheme } from '@react-navigation/native';
-import { RevenueCatUI, PAYWALL_RESULT } from 'react-native-purchases-ui';
+import RevenueCatUI, { PAYWALL_RESULT } from 'react-native-purchases-ui';
+import Purchases from 'react-native-purchases';
 import { toast } from '../lib/toast';
 import { useTranslation } from 'react-i18next';
+import { initializeRevenueCat } from '../lib/iap';
+import { supabase } from '../lib/supabase';
 
 interface PaywallScreenProps {
   navigation: any;
@@ -26,8 +29,28 @@ export default function PaywallScreen({ navigation, route }: PaywallScreenProps)
 
   const presentPaywall = async () => {
     try {
+      // Ensure RevenueCat is initialized
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+          throw new Error('No user logged in');
+        }
+
+        // Check if already configured by trying to get customer info
+        try {
+          await Purchases.getCustomerInfo();
+        } catch {
+          // Not configured yet, initialize now
+          console.log('[Paywall] Initializing RevenueCat...');
+          await initializeRevenueCat(user.id);
+        }
+      } catch (initError: any) {
+        console.error('[Paywall] Initialization error:', initError);
+        throw new Error('Failed to initialize payment system');
+      }
+
       // Present the RevenueCat Paywall
-      const result = await RevenueCatUI.presentPaywall({
+      const result: PAYWALL_RESULT = await RevenueCatUI.presentPaywall({
         // Optional: customize paywall appearance
         // offering: 'default', // Use specific offering
       });

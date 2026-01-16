@@ -71,13 +71,6 @@ const es = {
       stats: { events: 'Eventos', listsCreated: 'Listas creadas' },
       account: 'Cuenta',
       signOut: 'Cerrar sesión',
-      supportUs: {
-        button: '☕ Apóyanos',
-        title: 'Apóyanos',
-        message: 'Esta es una donación única y no otorgará acceso premium debido a las reglas de la tienda de aplicaciones. ¡Gracias por tu apoyo!',
-        cancel: 'Quizás más tarde',
-        confirm: 'Apóyanos',
-      },
       manageSubscription: {
         button: '⭐ Administrar suscripción',
       },

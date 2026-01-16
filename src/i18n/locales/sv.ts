@@ -70,13 +70,6 @@ const sv = {
       stats: { events: 'Evenemang', listsCreated: 'Listor skapade' },
       account: 'Konto',
       signOut: 'Logga ut',
-      supportUs: {
-        button: '☕ Stötta oss',
-        title: 'Stötta oss',
-        message: 'Detta är en engångsdonation och ger inte premium-åtkomst på grund av regler i appbutiken. Tack för ditt stöd!',
-        cancel: 'Kanske senare',
-        confirm: 'Stötta oss',
-      },
       manageSubscription: {
         button: '⭐ Hantera prenumeration',
       },

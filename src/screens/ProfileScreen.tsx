@@ -1,6 +1,6 @@
 // src/screens/ProfileScreen.tsx
 import React, { useCallback, useState } from 'react';
-import { View, Text, ActivityIndicator, Alert, Pressable, ScrollView, Linking } from 'react-native';
+import { View, Text, ActivityIndicator, Alert, Pressable, ScrollView } from 'react-native';
 import { useFocusEffect, useTheme } from '@react-navigation/native';
 import { supabase } from '../lib/supabase';
 import { toast } from '../lib/toast';
@@ -135,31 +135,6 @@ export default function ProfileScreen({ navigation }: any) {
       toast.error(t('profile.alerts.signOutErrTitle'), { text2: e?.message ?? String(e) });
     }
   };
-  const handleSupportUs = () => {
-    Alert.alert(
-      t('profile.supportUs.title', 'Support Us'),
-      t('profile.supportUs.message', 'This is a one-time donation and won\'t grant premium access due to app store rules. Thank you for your support!'),
-      [
-        {
-          text: t('profile.supportUs.cancel', 'Maybe later'),
-          style: 'cancel',
-        },
-        {
-          text: t('profile.supportUs.confirm', 'Support us'),
-          onPress: async () => {
-            const url = 'https://buymeacoffee.com/giftcircles';
-            const supported = await Linking.canOpenURL(url);
-
-            if (supported) {
-              await Linking.openURL(url);
-            } else {
-              toast.error(t('support.errors.cantOpenUrl'), { text2: url });
-            }
-          },
-        },
-      ]
-    );
-  };
 
   const handleSignOut = async () => {
     setSigningOut(true);
@@ -209,14 +184,14 @@ export default function ProfileScreen({ navigation }: any) {
   return (
     <Screen withTopSafeArea>
       <ScrollView style={{ flex: 1, backgroundColor: colors.background }} contentContainerStyle={{ paddingBottom: bottomPad }}>
-        {/* Support Us button - only shown for free users */}
+        {/* Upgrade to Pro button - only shown for free users */}
         {!isPro && (
           <View style={{ marginHorizontal: 16, marginTop: 16 }}>
             <Pressable
-              onPress={handleSupportUs}
+              onPress={() => navigation.navigate('Paywall')}
               style={({ pressed }) => ({
-                backgroundColor: '#21c36b',
-                paddingVertical: 12,
+                backgroundColor: '#FFD700',
+                paddingVertical: 14,
                 paddingHorizontal: 16,
                 borderRadius: 12,
                 flexDirection: 'row',
@@ -224,14 +199,14 @@ export default function ProfileScreen({ navigation }: any) {
                 justifyContent: 'center',
                 opacity: pressed ? 0.8 : 1,
                 shadowColor: '#000',
-                shadowOpacity: 0.1,
+                shadowOpacity: 0.2,
                 shadowRadius: 8,
                 shadowOffset: { width: 0, height: 2 },
-                elevation: 2,
+                elevation: 3,
               })}
             >
-              <Text style={{ color: 'white', fontWeight: '800', fontSize: 16 }}>
-                {t('profile.supportUs.button', '☕ Support Us')}
+              <Text style={{ color: '#000', fontWeight: '800', fontSize: 16 }}>
+                {t('profile.upgradeToPro.button', 'Upgrade to Pro')}
               </Text>
             </Pressable>
           </View>

@@ -114,6 +114,13 @@ export function handleNotificationNavigation(
       navigationRef.current.navigate('Home', { screen: 'Events' });
       break;
 
+    case 'event_rollover':
+      // Recurring event needs rollover
+      if (event_id) {
+        navigationRef.current.navigate('EventDetail', { id: event_id });
+      }
+      break;
+
     default:
       // Default to home screen for unknown notification types
       navigationRef.current.navigate('Home');

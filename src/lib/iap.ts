@@ -6,12 +6,22 @@ import Purchases, {
   LOG_LEVEL,
 } from 'react-native-purchases';
 import Constants from 'expo-constants';
+import { Platform } from 'react-native';
 import { supabase } from './supabase';
+
+// RevenueCat Test Store API key for testing in Expo Go
+// See: https://rev.cat/sdk-test-store
+// Cross-platform test key works for both iOS and Android
+const TEST_STORE_API_KEY = 'test_yhSMypLWpinXxVeZkVfdDIKmRuA';
 
 const REVENUECAT_API_KEY = Constants.expoConfig?.extra?.revenueCatApiKey;
 const ENTITLEMENT_ID = 'pro';
 
 let isConfigured = false;
+
+// Check if running in Expo Go
+// Use Test Store key only when in Expo Go
+const isExpoGo = Constants.appOwnership === 'expo';
 
 /**
  * Initialize RevenueCat SDK with user ID
@@ -23,15 +33,30 @@ export async function initializeRevenueCat(userId: string): Promise<void> {
     return;
   }
 
-  if (!REVENUECAT_API_KEY) {
-    console.error('[RevenueCat] API key not configured in app.json');
+  // Use Test Store API key when in Expo Go, otherwise use production key
+  let apiKey: string;
+  if (isExpoGo || !REVENUECAT_API_KEY) {
+    // Use test store key for Expo Go or when production key not configured
+    apiKey = TEST_STORE_API_KEY;
+    console.log('[RevenueCat] Using Test Store API key');
+  } else {
+    apiKey = REVENUECAT_API_KEY;
+    console.log('[RevenueCat] Using production API key');
+  }
+
+  if (!apiKey) {
+    console.error('[RevenueCat] API key not configured');
     return;
   }
 
   try {
+    if (isExpoGo) {
+      console.log('[RevenueCat] Running in Expo Go - using Test Store');
+    }
+
     // Configure RevenueCat
     Purchases.configure({
-      apiKey: REVENUECAT_API_KEY,
+      apiKey: apiKey,
       appUserID: userId,
     });
 
