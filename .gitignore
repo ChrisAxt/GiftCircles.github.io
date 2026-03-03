@@ -1,0 +1,5 @@
+# Firebase / Google Cloud app config files (contain API keys/identifiers)
+google-services.json
+GoogleService-Info.plist
+**/google-services.json
+**/GoogleService-Info.plist
