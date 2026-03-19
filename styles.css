@@ -289,6 +289,8 @@ li strong {
 /* App badge buttons */
 .store-badge {
   height: 50px;
+  width: auto;
+  display: block;
   transition: transform 0.2s ease;
 }
 
